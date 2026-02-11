@@ -1,0 +1,8 @@
+{
+  "name": "Cloud CDN with Backend Bucket",
+  "description": "Deploys a Cloud CDN configuration with a GCS backend bucket for static content, configurable caching policies, CORS, website serving, optional managed SSL, and global HTTP(S) load balancing.",
+  "provider": "gcp",
+  "category": "storage",
+  "version": "1.0.0",
+  "tags": ["gcp", "storage", "cdn", "caching", "static-content", "global"]
+}

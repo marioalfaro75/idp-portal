@@ -1,0 +1,8 @@
+{
+  "name": "AWS RDS PostgreSQL",
+  "description": "Deploys an RDS PostgreSQL instance with configurable storage, Multi-AZ support, automated backups, Performance Insights, and security group access controls.",
+  "provider": "aws",
+  "category": "databases",
+  "version": "1.0.0",
+  "tags": ["aws", "databases", "rds", "postgresql", "relational"]
+}

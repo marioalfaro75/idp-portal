@@ -1,0 +1,8 @@
+{
+  "name": "Cloud Storage Bucket",
+  "description": "Deploys a Google Cloud Storage bucket with configurable storage class, versioning, lifecycle rules, CORS, KMS encryption, access logging, retention policies, IAM bindings, and Pub/Sub notifications.",
+  "provider": "gcp",
+  "category": "storage",
+  "version": "1.0.0",
+  "tags": ["gcp", "storage", "gcs", "bucket", "object-storage"]
+}

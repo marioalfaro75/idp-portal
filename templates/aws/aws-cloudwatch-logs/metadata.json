@@ -1,0 +1,8 @@
+{
+  "name": "AWS CloudWatch Log Group",
+  "description": "Creates a CloudWatch Log Group with configurable retention, encryption, metric filters, subscription filters, saved Insights queries, and IAM access policies.",
+  "provider": "aws",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "tags": ["aws", "monitoring", "cloudwatch", "logs", "observability"]
+}

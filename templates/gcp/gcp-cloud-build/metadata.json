@@ -1,0 +1,8 @@
+{
+  "name": "GCP Cloud Build",
+  "description": "Cloud Build trigger connected to a source repository",
+  "provider": "gcp",
+  "category": "cicd",
+  "version": "1.0.0",
+  "tags": ["gcp", "cicd", "cloud-build", "ci", "build"]
+}

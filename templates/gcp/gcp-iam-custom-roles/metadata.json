@@ -1,0 +1,8 @@
+{
+  "name": "Custom IAM Roles",
+  "description": "Creates custom IAM roles with fine-grained permissions, service accounts, role bindings, and optional Workload Identity bindings for GKE workloads.",
+  "provider": "gcp",
+  "category": "security",
+  "version": "1.0.0",
+  "tags": ["gcp", "security", "iam", "custom-roles", "service-accounts", "workload-identity"]
+}

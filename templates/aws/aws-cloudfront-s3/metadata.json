@@ -1,0 +1,8 @@
+{
+  "name": "AWS CloudFront + S3 Static Site",
+  "description": "Deploys a CloudFront distribution backed by an S3 bucket for static website hosting, with Origin Access Control, security headers, caching, and optional custom domain support.",
+  "provider": "aws",
+  "category": "storage",
+  "version": "1.0.0",
+  "tags": ["aws", "storage", "cloudfront", "s3", "static-site", "cdn"]
+}

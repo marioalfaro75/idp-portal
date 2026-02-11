@@ -1,0 +1,8 @@
+{
+  "name": "KMS Keyring and Key",
+  "description": "Creates a Cloud KMS keyring with configurable crypto keys, automatic key rotation, HSM or software protection levels, and IAM bindings for encryption and decryption access.",
+  "provider": "gcp",
+  "category": "security",
+  "version": "1.0.0",
+  "tags": ["gcp", "security", "kms", "encryption", "keyring", "crypto-key"]
+}

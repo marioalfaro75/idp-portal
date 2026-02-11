@@ -1,0 +1,8 @@
+{
+  "name": "AWS CloudWatch Alarms",
+  "description": "Creates CloudWatch metric alarms for CPU, memory, errors, and latency with SNS notification topic and support for custom alarms.",
+  "provider": "aws",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "tags": ["aws", "monitoring", "cloudwatch", "alarms", "alerting"]
+}

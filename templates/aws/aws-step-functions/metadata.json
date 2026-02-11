@@ -1,0 +1,8 @@
+{
+  "name": "AWS Step Functions State Machine",
+  "description": "Deploys an AWS Step Functions state machine with IAM roles, CloudWatch logging, X-Ray tracing, and optional EventBridge scheduled trigger.",
+  "provider": "aws",
+  "category": "serverless",
+  "version": "1.0.0",
+  "tags": ["aws", "serverless", "step-functions", "workflow", "orchestration"]
+}

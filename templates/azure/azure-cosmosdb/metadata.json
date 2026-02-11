@@ -1,0 +1,8 @@
+{
+  "name": "Azure Cosmos DB",
+  "description": "Deploys an Azure Cosmos DB account with configurable consistency, geo-replication, backup policies, and an optional SQL database with container",
+  "provider": "azure",
+  "category": "databases",
+  "version": "1.0.0",
+  "tags": ["azure", "databases", "cosmosdb", "nosql", "global-distribution"]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Azure Service Bus",
+  "description": "Service Bus namespace with queue for enterprise messaging",
+  "provider": "azure",
+  "category": "messaging",
+  "version": "1.0.0",
+  "tags": ["azure", "messaging", "service-bus", "queue"]
+}

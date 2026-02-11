@@ -1,0 +1,8 @@
+{
+  "name": "Azure Function App",
+  "description": "Deploys an Azure Function App with a storage account, service plan, optional Application Insights, and support for Linux or Windows runtimes",
+  "provider": "azure",
+  "category": "serverless",
+  "version": "1.0.0",
+  "tags": ["azure", "serverless", "function-app", "functions", "faas"]
+}

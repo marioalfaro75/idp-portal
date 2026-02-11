@@ -1,0 +1,8 @@
+{
+  "name": "Azure Monitor Metric Alerts",
+  "description": "Deploys Azure Monitor action groups with email and webhook receivers, metric alerts, and activity log alerts",
+  "provider": "azure",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "tags": ["azure", "monitoring", "alerts", "monitor", "metrics", "notifications"]
+}

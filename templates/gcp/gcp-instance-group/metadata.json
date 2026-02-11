@@ -1,0 +1,8 @@
+{
+  "name": "Managed Instance Group",
+  "description": "Deploys a regional Managed Instance Group with instance template, autohealing health checks, rolling update policies, and optional CPU-based autoscaling.",
+  "provider": "gcp",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["gcp", "compute", "instance-group", "autoscaling", "mig"]
+}

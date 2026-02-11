@@ -1,0 +1,8 @@
+{
+  "name": "AWS ECR Repository",
+  "description": "Elastic Container Registry repository for Docker images",
+  "provider": "aws",
+  "category": "containers",
+  "version": "1.0.0",
+  "tags": ["aws", "containers", "ecr", "docker", "registry"]
+}

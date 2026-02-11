@@ -1,0 +1,8 @@
+{
+  "name": "AWS SNS Topic",
+  "description": "SNS topic with email subscription for notifications",
+  "provider": "aws",
+  "category": "messaging",
+  "version": "1.0.0",
+  "tags": ["aws", "messaging", "sns", "notifications", "pubsub"]
+}

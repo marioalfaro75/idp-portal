@@ -1,0 +1,8 @@
+{
+  "name": "Azure Application Gateway",
+  "description": "Deploys an Azure Application Gateway with a public IP, HTTP listener, backend pool, and routing rules",
+  "provider": "azure",
+  "category": "networking",
+  "version": "1.0.0",
+  "tags": ["azure", "networking", "application-gateway", "load-balancer", "waf"]
+}

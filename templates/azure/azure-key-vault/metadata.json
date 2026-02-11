@@ -1,0 +1,8 @@
+{
+  "name": "Azure Key Vault",
+  "description": "Deploys an Azure Key Vault with configurable access policies or RBAC authorization, network ACLs, purge protection, and optional secret management",
+  "provider": "azure",
+  "category": "security",
+  "version": "1.0.0",
+  "tags": ["azure", "security", "key-vault", "secrets", "encryption"]
+}

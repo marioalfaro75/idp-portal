@@ -1,0 +1,8 @@
+{
+  "name": "GCP Artifact Registry Docker",
+  "description": "Artifact Registry Docker repository for container images",
+  "provider": "gcp",
+  "category": "containers",
+  "version": "1.0.0",
+  "tags": ["gcp", "containers", "artifact-registry", "docker", "registry"]
+}

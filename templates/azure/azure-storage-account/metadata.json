@@ -1,0 +1,8 @@
+{
+  "name": "Azure Storage Account",
+  "description": "Deploys an Azure Storage Account with configurable replication, blob versioning, soft delete, network rules, and optional containers and file shares",
+  "provider": "azure",
+  "category": "storage",
+  "version": "1.0.0",
+  "tags": ["azure", "storage", "blob", "storage-account", "file-share"]
+}

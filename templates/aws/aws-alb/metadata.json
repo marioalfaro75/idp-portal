@@ -1,0 +1,8 @@
+{
+  "name": "AWS Application Load Balancer",
+  "description": "Deploys an Application Load Balancer with target group, HTTP/HTTPS listeners, security group, and optional access logging.",
+  "provider": "aws",
+  "category": "networking",
+  "version": "1.0.0",
+  "tags": ["aws", "networking", "alb", "load-balancer", "https"]
+}

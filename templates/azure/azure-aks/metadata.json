@@ -1,0 +1,8 @@
+{
+  "name": "Azure Kubernetes Service (AKS)",
+  "description": "Deploys an AKS cluster with managed identity, configurable node pools, auto-scaling, Azure CNI networking, and optional Log Analytics integration",
+  "provider": "azure",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["azure", "compute", "aks", "kubernetes", "containers", "orchestration"]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "AWS Lambda with API Gateway",
+  "description": "Deploys an AWS Lambda function with optional HTTP API Gateway, IAM execution role, CloudWatch logging, and CORS configuration.",
+  "provider": "aws",
+  "category": "serverless",
+  "version": "1.0.0",
+  "tags": ["aws", "serverless", "lambda", "api-gateway", "http-api"]
+}

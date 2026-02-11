@@ -1,0 +1,8 @@
+{
+  "name": "Cloud Load Balancer",
+  "description": "Deploys a Google Cloud global HTTP(S) Load Balancer with backend service, health checks, URL map, and optional managed SSL certificates for HTTPS termination.",
+  "provider": "gcp",
+  "category": "networking",
+  "version": "1.0.0",
+  "tags": ["gcp", "networking", "load-balancer", "https", "ssl", "global"]
+}

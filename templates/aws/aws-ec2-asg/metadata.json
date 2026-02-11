@@ -1,0 +1,8 @@
+{
+  "name": "AWS EC2 Auto Scaling Group",
+  "description": "Deploys an EC2 Auto Scaling Group with launch template, IAM instance profile, security group, and optional CPU-based target tracking scaling policy.",
+  "provider": "aws",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["aws", "compute", "ec2", "auto-scaling", "asg"]
+}

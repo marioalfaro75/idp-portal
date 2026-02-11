@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  displayName  String
+  passwordHash String?
+  isActive     Boolean   @default(true)
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions         Session[]
+  oauthAccounts    OAuthAccount[]
+  githubConnection GitHubConnection?
+  deployments      Deployment[]
+  auditLogs        AuditLog[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  permissions String   // JSON array of permission strings
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  users User[]
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  provider          String
+  providerAccountId String
+  accessToken       String?  // encrypted
+  refreshToken      String?  // encrypted
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model CloudConnection {
+  id                String   @id @default(uuid())
+  name              String
+  provider          String   // aws, gcp, azure
+  encryptedCredentials String // AES-256-GCM encrypted JSON
+  status            String   @default("pending") // connected, error, pending
+  accountIdentifier String   @default("")
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  deployments Deployment[]
+}
+
+model GitHubConnection {
+  id             String   @id @default(uuid())
+  encryptedToken String   // AES-256-GCM encrypted
+  username       String
+  scopes         String   // JSON array
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Template {
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  name         String
+  description  String   @default("")
+  provider     String   // aws, gcp, azure
+  category     String
+  version      String   @default("1.0.0")
+  templatePath String
+  variables    String   @default("[]") // JSON array of TemplateVariable
+  outputs      String   @default("[]") // JSON array of TemplateOutput
+  tags         String   @default("[]") // JSON array of strings
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deployments Deployment[]
+}
+
+model Deployment {
+  id                String   @id @default(uuid())
+  name              String
+  status            String   @default("pending")
+  templateId        String
+  template          Template @relation(fields: [templateId], references: [id])
+  cloudConnectionId String
+  cloudConnection   CloudConnection @relation(fields: [cloudConnectionId], references: [id])
+  variables         String   @default("{}") // JSON
+  planOutput        String?
+  applyOutput       String?
+  destroyOutput     String?
+  outputs           String?  // JSON of terraform outputs
+  terraformState    String?  // terraform state file content
+  errorMessage      String?
+  createdById       String
+  createdBy         User     @relation(fields: [createdById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  resource   String
+  resourceId String?
+  details    String?  // JSON
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

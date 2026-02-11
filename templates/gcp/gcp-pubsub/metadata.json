@@ -1,0 +1,8 @@
+{
+  "name": "GCP Pub/Sub",
+  "description": "Pub/Sub topic with subscription for event-driven messaging",
+  "provider": "gcp",
+  "category": "messaging",
+  "version": "1.0.0",
+  "tags": ["gcp", "messaging", "pubsub", "events"]
+}

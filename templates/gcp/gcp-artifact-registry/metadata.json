@@ -1,0 +1,8 @@
+{
+  "name": "GCP Artifact Registry",
+  "description": "Artifact Registry repository for storing build artifacts",
+  "provider": "gcp",
+  "category": "cicd",
+  "version": "1.0.0",
+  "tags": ["gcp", "cicd", "artifact-registry", "packages"]
+}

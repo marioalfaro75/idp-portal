@@ -1,0 +1,8 @@
+{
+  "name": "Cloud SQL PostgreSQL",
+  "description": "Deploys a Cloud SQL PostgreSQL instance with high availability, automated backups, point-in-time recovery, private networking, Query Insights, and auto-generated credentials stored in Secret Manager.",
+  "provider": "gcp",
+  "category": "databases",
+  "version": "1.0.0",
+  "tags": ["gcp", "databases", "cloud-sql", "postgresql", "rdbms", "ha"]
+}

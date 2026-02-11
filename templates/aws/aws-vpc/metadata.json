@@ -1,0 +1,8 @@
+{
+  "name": "AWS VPC with Public/Private Subnets",
+  "description": "Creates a VPC with configurable public and private subnets across multiple availability zones, including Internet Gateway, NAT Gateways, and route tables.",
+  "provider": "aws",
+  "category": "networking",
+  "version": "1.0.0",
+  "tags": ["aws", "networking", "vpc", "subnets", "nat-gateway"]
+}

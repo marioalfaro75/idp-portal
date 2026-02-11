@@ -1,0 +1,8 @@
+{
+  "name": "AWS DynamoDB Table",
+  "description": "Deploys a DynamoDB table with configurable billing mode, global secondary indexes, encryption, TTL, streams, point-in-time recovery, and optional auto scaling.",
+  "provider": "aws",
+  "category": "databases",
+  "version": "1.0.0",
+  "tags": ["aws", "databases", "dynamodb", "nosql", "serverless"]
+}

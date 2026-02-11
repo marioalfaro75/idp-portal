@@ -1,0 +1,8 @@
+{
+  "name": "Azure Event Grid",
+  "description": "Event Grid custom topic for event-driven architectures",
+  "provider": "azure",
+  "category": "messaging",
+  "version": "1.0.0",
+  "tags": ["azure", "messaging", "event-grid", "events", "serverless"]
+}

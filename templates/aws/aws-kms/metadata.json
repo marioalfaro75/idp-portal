@@ -1,0 +1,8 @@
+{
+  "name": "AWS KMS Encryption Key",
+  "description": "Creates a KMS encryption key with configurable key policy, alias, automatic rotation, multi-region support, and granular access control for administrators and users.",
+  "provider": "aws",
+  "category": "security",
+  "version": "1.0.0",
+  "tags": ["aws", "security", "kms", "encryption", "key-management"]
+}

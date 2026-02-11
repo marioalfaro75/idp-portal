@@ -1,0 +1,8 @@
+{
+  "name": "Azure Virtual Network",
+  "description": "Deploys an Azure Virtual Network with configurable subnets, DNS settings, and an optional default network security group",
+  "provider": "azure",
+  "category": "networking",
+  "version": "1.0.0",
+  "tags": ["azure", "networking", "vnet", "virtual-network", "subnets"]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Azure Container Registry",
+  "description": "Azure Container Registry for storing Docker container images",
+  "provider": "azure",
+  "category": "cicd",
+  "version": "1.0.0",
+  "tags": ["azure", "cicd", "acr", "containers", "registry"]
+}

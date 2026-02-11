@@ -1,0 +1,8 @@
+{
+  "name": "Firestore Database",
+  "description": "Deploys a Firestore database in Native or Datastore mode with configurable composite indexes, daily and weekly backup schedules, point-in-time recovery, and deletion protection.",
+  "provider": "gcp",
+  "category": "databases",
+  "version": "1.0.0",
+  "tags": ["gcp", "databases", "firestore", "nosql", "document-db"]
+}

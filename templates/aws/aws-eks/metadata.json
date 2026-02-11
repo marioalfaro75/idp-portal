@@ -1,0 +1,8 @@
+{
+  "name": "AWS EKS Kubernetes Cluster",
+  "description": "Deploys an Amazon EKS cluster with a managed node group, IAM roles, security groups, and configurable Kubernetes version and scaling parameters.",
+  "provider": "aws",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["aws", "compute", "eks", "kubernetes", "containers"]
+}

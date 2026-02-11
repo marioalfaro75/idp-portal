@@ -1,0 +1,8 @@
+{
+  "name": "Azure DevOps Pipeline",
+  "description": "Deploys an Azure DevOps build pipeline with optional Git repository creation, branch policies, and build validation using the azuredevops provider",
+  "provider": "azure",
+  "category": "cicd",
+  "version": "1.0.0",
+  "tags": ["azure", "cicd", "devops", "pipeline", "build", "ci-cd"]
+}

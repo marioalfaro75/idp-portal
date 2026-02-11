@@ -1,0 +1,8 @@
+{
+  "name": "Cloud Functions",
+  "description": "Deploys a 2nd-gen Cloud Function with configurable runtime, memory, scaling, HTTP or event-driven triggers, Secret Manager integration, and source code stored in Cloud Storage.",
+  "provider": "gcp",
+  "category": "serverless",
+  "version": "1.0.0",
+  "tags": ["gcp", "serverless", "cloud-functions", "faas", "event-driven"]
+}

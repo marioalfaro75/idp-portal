@@ -1,0 +1,8 @@
+{
+  "name": "Azure CDN Profile and Endpoint",
+  "description": "Deploys an Azure CDN profile and endpoint with configurable origin, compression, caching rules, and optional HTTPS redirect",
+  "provider": "azure",
+  "category": "storage",
+  "version": "1.0.0",
+  "tags": ["azure", "storage", "cdn", "content-delivery", "caching"]
+}

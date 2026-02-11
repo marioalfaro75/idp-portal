@@ -1,0 +1,8 @@
+{
+  "name": "Monitoring Alert Policies",
+  "description": "Deploys Cloud Monitoring alert policies for CPU, memory, and disk utilization with email and Slack notification channels, plus optional HTTPS uptime checks.",
+  "provider": "gcp",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "tags": ["gcp", "monitoring", "alerts", "uptime", "notifications", "observability"]
+}

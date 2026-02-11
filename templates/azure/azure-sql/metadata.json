@@ -1,0 +1,8 @@
+{
+  "name": "Azure SQL Database",
+  "description": "Deploys an Azure SQL Server and Database with Azure AD authentication, backup retention policies, and configurable firewall rules",
+  "provider": "azure",
+  "category": "databases",
+  "version": "1.0.0",
+  "tags": ["azure", "databases", "sql", "mssql", "relational-database"]
+}

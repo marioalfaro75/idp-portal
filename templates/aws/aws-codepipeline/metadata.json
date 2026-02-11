@@ -1,0 +1,8 @@
+{
+  "name": "AWS CodePipeline",
+  "description": "Creates a CodePipeline with source (CodeStar connection), build (CodeBuild), and optional deploy stages, including S3 artifact storage and IAM roles.",
+  "provider": "aws",
+  "category": "cicd",
+  "version": "1.0.0",
+  "tags": ["aws", "cicd", "codepipeline", "continuous-delivery", "automation"]
+}

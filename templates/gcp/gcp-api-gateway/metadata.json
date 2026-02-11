@@ -1,0 +1,8 @@
+{
+  "name": "API Gateway",
+  "description": "Deploys a Google Cloud API Gateway with an OpenAPI specification, API config, and gateway endpoint. Includes automatic enablement of required APIs.",
+  "provider": "gcp",
+  "category": "serverless",
+  "version": "1.0.0",
+  "tags": ["gcp", "serverless", "api-gateway", "openapi", "rest"]
+}

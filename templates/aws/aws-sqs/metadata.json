@@ -1,0 +1,8 @@
+{
+  "name": "AWS SQS Queue",
+  "description": "SQS queue with dead-letter queue for reliable message processing",
+  "provider": "aws",
+  "category": "messaging",
+  "version": "1.0.0",
+  "tags": ["aws", "messaging", "sqs", "queue"]
+}

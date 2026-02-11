@@ -1,0 +1,8 @@
+{
+  "name": "AWS IAM Roles and Policies",
+  "description": "Creates an IAM role with configurable trust policy, custom inline policies, managed policy attachments, permissions boundary, and optional instance profile.",
+  "provider": "aws",
+  "category": "security",
+  "version": "1.0.0",
+  "tags": ["aws", "security", "iam", "roles", "policies"]
+}

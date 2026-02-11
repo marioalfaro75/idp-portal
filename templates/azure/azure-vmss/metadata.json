@@ -1,0 +1,8 @@
+{
+  "name": "Azure VM Scale Set",
+  "description": "Deploys a Linux Virtual Machine Scale Set with SSH key authentication, configurable autoscaling, and rolling upgrade support",
+  "provider": "azure",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["azure", "compute", "vmss", "virtual-machine", "scale-set", "autoscale"]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "GKE Kubernetes Cluster",
+  "description": "Deploys a Google Kubernetes Engine cluster with a configurable node pool, Workload Identity, private cluster support, autoscaling, and managed monitoring with Prometheus.",
+  "provider": "gcp",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["gcp", "compute", "gke", "kubernetes", "containers", "autoscaling"]
+}

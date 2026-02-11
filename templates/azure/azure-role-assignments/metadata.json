@@ -1,0 +1,8 @@
+{
+  "name": "Azure Role Assignments",
+  "description": "Manages Azure RBAC role assignments at subscription, resource group, and resource levels, with support for custom role definitions",
+  "provider": "azure",
+  "category": "security",
+  "version": "1.0.0",
+  "tags": ["azure", "security", "rbac", "role-assignments", "iam"]
+}

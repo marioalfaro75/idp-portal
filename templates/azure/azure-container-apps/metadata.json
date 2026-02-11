@@ -1,0 +1,8 @@
+{
+  "name": "Azure Container Apps",
+  "description": "Azure Container Apps environment with a container app deployment",
+  "provider": "azure",
+  "category": "containers",
+  "version": "1.0.0",
+  "tags": ["azure", "containers", "container-apps", "serverless"]
+}

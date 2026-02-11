@@ -1,0 +1,8 @@
+{
+  "name": "Azure Log Analytics Workspace",
+  "description": "Deploys a Log Analytics workspace with configurable retention, solutions, data sources, and diagnostic settings for connected resources",
+  "provider": "azure",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "tags": ["azure", "monitoring", "log-analytics", "logging", "diagnostics"]
+}

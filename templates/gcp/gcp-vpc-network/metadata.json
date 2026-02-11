@@ -1,0 +1,8 @@
+{
+  "name": "VPC Network with Subnets",
+  "description": "Deploys a Google Cloud VPC network with configurable subnets, Cloud NAT gateway, Cloud Router, and internal firewall rules. Supports secondary IP ranges for GKE clusters.",
+  "provider": "gcp",
+  "category": "networking",
+  "version": "1.0.0",
+  "tags": ["gcp", "networking", "vpc", "subnets", "nat", "firewall"]
+}

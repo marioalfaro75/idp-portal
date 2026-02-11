@@ -1,0 +1,8 @@
+{
+  "name": "Azure API Management",
+  "description": "Deploys an Azure API Management instance with configurable products, named values, and optional VNET integration",
+  "provider": "azure",
+  "category": "serverless",
+  "version": "1.0.0",
+  "tags": ["azure", "serverless", "api-management", "apim", "api-gateway"]
+}

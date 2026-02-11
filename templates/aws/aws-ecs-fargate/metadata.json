@@ -1,0 +1,8 @@
+{
+  "name": "AWS ECS Fargate",
+  "description": "ECS Fargate service with task definition and ALB integration",
+  "provider": "aws",
+  "category": "containers",
+  "version": "1.0.0",
+  "tags": ["aws", "containers", "ecs", "fargate", "docker"]
+}

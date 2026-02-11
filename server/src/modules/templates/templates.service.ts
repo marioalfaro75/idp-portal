@@ -1,0 +1,83 @@
+import { prisma } from '../../prisma';
+import { NotFoundError } from '../../utils/errors';
+import { scanTemplates } from './template-parser';
+
+export async function list(query?: { provider?: string; category?: string; search?: string }) {
+  const where: Record<string, unknown> = {};
+  if (query?.provider) where.provider = query.provider;
+  if (query?.category) where.category = query.category;
+  if (query?.search) {
+    where.OR = [
+      { name: { contains: query.search } },
+      { description: { contains: query.search } },
+    ];
+  }
+
+  const templates = await prisma.template.findMany({ where, orderBy: { name: 'asc' } });
+  return templates.map(formatTemplate);
+}
+
+export async function get(id: string) {
+  const template = await prisma.template.findUnique({ where: { id } });
+  if (!template) throw new NotFoundError('Template');
+  return formatTemplate(template);
+}
+
+export async function getBySlug(slug: string) {
+  const template = await prisma.template.findUnique({ where: { slug } });
+  if (!template) throw new NotFoundError('Template');
+  return formatTemplate(template);
+}
+
+export async function sync(): Promise<number> {
+  const parsed = scanTemplates();
+
+  for (const t of parsed) {
+    await prisma.template.upsert({
+      where: { slug: t.slug },
+      create: {
+        slug: t.slug,
+        name: t.metadata.name,
+        description: t.metadata.description,
+        provider: t.metadata.provider,
+        category: t.metadata.category,
+        version: t.metadata.version,
+        templatePath: t.templatePath,
+        variables: JSON.stringify(t.variables),
+        outputs: JSON.stringify(t.outputs),
+        tags: JSON.stringify(t.metadata.tags),
+      },
+      update: {
+        name: t.metadata.name,
+        description: t.metadata.description,
+        provider: t.metadata.provider,
+        category: t.metadata.category,
+        version: t.metadata.version,
+        templatePath: t.templatePath,
+        variables: JSON.stringify(t.variables),
+        outputs: JSON.stringify(t.outputs),
+        tags: JSON.stringify(t.metadata.tags),
+      },
+    });
+  }
+
+  return parsed.length;
+}
+
+function formatTemplate(t: any) {
+  return {
+    id: t.id,
+    slug: t.slug,
+    name: t.name,
+    description: t.description,
+    provider: t.provider,
+    category: t.category,
+    version: t.version,
+    templatePath: t.templatePath,
+    variables: JSON.parse(t.variables),
+    outputs: JSON.parse(t.outputs),
+    tags: JSON.parse(t.tags),
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+  };
+}

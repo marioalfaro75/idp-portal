@@ -1,0 +1,8 @@
+{
+  "name": "AWS S3 Bucket with Versioning",
+  "description": "Deploys an S3 bucket with versioning, server-side encryption, public access blocking, lifecycle rules, access logging, and CORS configuration.",
+  "provider": "aws",
+  "category": "storage",
+  "version": "1.0.0",
+  "tags": ["aws", "storage", "s3", "bucket", "versioning"]
+}

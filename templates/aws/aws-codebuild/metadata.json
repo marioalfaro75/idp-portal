@@ -1,0 +1,8 @@
+{
+  "name": "AWS CodeBuild",
+  "description": "CodeBuild project for building and testing applications",
+  "provider": "aws",
+  "category": "cicd",
+  "version": "1.0.0",
+  "tags": ["aws", "cicd", "codebuild", "build", "ci"]
+}

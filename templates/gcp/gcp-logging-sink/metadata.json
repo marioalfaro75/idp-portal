@@ -1,0 +1,8 @@
+{
+  "name": "Logging Sink",
+  "description": "Deploys a Cloud Logging sink with configurable destinations (Cloud Storage, BigQuery, or Pub/Sub), log filters, exclusion rules, automatic IAM grants, and lifecycle management.",
+  "provider": "gcp",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "tags": ["gcp", "monitoring", "logging", "sink", "bigquery", "audit"]
+}

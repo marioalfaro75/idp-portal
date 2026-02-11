@@ -1,0 +1,8 @@
+{
+  "name": "Azure Container Instances",
+  "description": "Azure Container Instances for running containers without orchestration",
+  "provider": "azure",
+  "category": "containers",
+  "version": "1.0.0",
+  "tags": ["azure", "containers", "aci", "docker"]
+}
