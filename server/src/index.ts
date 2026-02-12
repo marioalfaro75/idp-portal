@@ -17,6 +17,8 @@ import deploymentsRoutes from './modules/deployments/deployments.routes';
 import githubRoutes from './modules/github/github.routes';
 import auditRoutes from './modules/audit/audit.routes';
 import settingsRoutes from './modules/settings/settings.routes';
+import { checkTerraformAvailable } from './modules/deployments/terraform-runner';
+import { pollGitHubDeployments } from './modules/deployments/github-executor';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,6 +49,14 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
+
+  checkTerraformAvailable().then(({ available, version }) => {
+    if (available) logger.info(`Terraform available: v${version}`);
+    else logger.warn('Terraform not found. Local deployments will fail. Install terraform or set TERRAFORM_BIN.');
+  });
+
+  // Start GitHub deployment poller
+  setInterval(pollGitHubDeployments, 30_000);
 });
 
 export default app;

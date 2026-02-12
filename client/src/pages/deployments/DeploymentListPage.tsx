@@ -10,7 +10,7 @@ const statusVariant = (status: string) => {
   switch (status) {
     case 'succeeded': return 'success' as const;
     case 'failed': return 'danger' as const;
-    case 'applying': case 'planning': case 'destroying': return 'warning' as const;
+    case 'applying': case 'planning': case 'destroying': case 'dispatched': case 'running': return 'warning' as const;
     case 'destroyed': return 'default' as const;
     default: return 'info' as const;
   }
@@ -42,6 +42,15 @@ export function DeploymentListPage() {
       key: 'cloudConnection',
       header: 'Connection',
       render: (d: Deployment) => d.cloudConnection?.name || '-',
+    },
+    {
+      key: 'execution',
+      header: 'Execution',
+      render: (d: Deployment) => (
+        <Badge variant={d.executionMethod === 'github' ? 'info' : 'default'}>
+          {d.executionMethod === 'github' ? 'GitHub' : 'Local'}
+        </Badge>
+      ),
     },
     {
       key: 'status',

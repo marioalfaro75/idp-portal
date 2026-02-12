@@ -7,12 +7,15 @@ import { Input } from '../../components/ui/Input';
 import toast from 'react-hot-toast';
 
 const OIDC_KEYS = ['oidc.tenantId', 'oidc.clientId', 'oidc.clientSecret', 'oidc.redirectUri'];
+const GITHUB_KEYS = ['github.defaultRepo', 'github.defaultWorkflow', 'github.defaultRef'];
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: settings = {}, isLoading } = useQuery({ queryKey: ['settings'], queryFn: settingsApi.getAll });
   const [oidcForm, setOidcForm] = useState<Record<string, string>>({});
+  const [githubForm, setGithubForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [savingGithub, setSavingGithub] = useState(false);
 
   const handleSaveOidc = async () => {
     setSaving(true);
@@ -28,6 +31,23 @@ export function SettingsPage() {
       toast.error(err.response?.data?.error?.message || 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveGithub = async () => {
+    setSavingGithub(true);
+    try {
+      for (const key of GITHUB_KEYS) {
+        if (githubForm[key] !== undefined) {
+          await settingsApi.set(key, githubForm[key]);
+        }
+      }
+      toast.success('GitHub Actions defaults saved');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Failed to save');
+    } finally {
+      setSavingGithub(false);
     }
   };
 
@@ -49,9 +69,33 @@ export function SettingsPage() {
         </div>
       </Card>
 
+      <Card title="GitHub Actions Defaults">
+        <div className="space-y-4 max-w-lg">
+          <Input
+            label="Default Repository"
+            placeholder="org/infra-repo"
+            value={githubForm['github.defaultRepo'] ?? settings['github.defaultRepo'] ?? ''}
+            onChange={(e) => setGithubForm({ ...githubForm, 'github.defaultRepo': e.target.value })}
+          />
+          <Input
+            label="Default Workflow"
+            placeholder="deploy.yml"
+            value={githubForm['github.defaultWorkflow'] ?? settings['github.defaultWorkflow'] ?? ''}
+            onChange={(e) => setGithubForm({ ...githubForm, 'github.defaultWorkflow': e.target.value })}
+          />
+          <Input
+            label="Default Branch"
+            placeholder="main"
+            value={githubForm['github.defaultRef'] ?? settings['github.defaultRef'] ?? ''}
+            onChange={(e) => setGithubForm({ ...githubForm, 'github.defaultRef': e.target.value })}
+          />
+          <Button onClick={handleSaveGithub} loading={savingGithub}>Save GitHub Defaults</Button>
+        </div>
+      </Card>
+
       <Card title="System Info">
         <dl className="space-y-2">
-          {Object.entries(settings).filter(([k]) => !k.startsWith('oidc.')).map(([key, value]) => (
+          {Object.entries(settings).filter(([k]) => !k.startsWith('oidc.') && !k.startsWith('github.')).map(([key, value]) => (
             <div key={key} className="flex gap-4">
               <dt className="text-sm font-medium text-gray-500 w-48">{key}</dt>
               <dd className="text-sm">{value}</dd>

@@ -7,14 +7,14 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS } from '@idp/shared';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const statusVariant = (status: string) => {
   switch (status) {
     case 'succeeded': return 'success' as const;
     case 'failed': return 'danger' as const;
-    case 'applying': case 'planning': case 'destroying': return 'warning' as const;
+    case 'applying': case 'planning': case 'destroying': case 'dispatched': case 'running': return 'warning' as const;
     default: return 'info' as const;
   }
 };
@@ -32,12 +32,14 @@ export function DeploymentDetailPage() {
     enabled: !!id,
     refetchInterval: (query) => {
       const d = query.state.data;
-      return d && ['pending', 'planning', 'applying', 'destroying'].includes(d.status) ? 2000 : false;
+      return d && ['pending', 'planning', 'applying', 'destroying', 'dispatched', 'running'].includes(d.status) ? 2000 : false;
     },
   });
 
   useEffect(() => {
     if (!id || !deployment) return;
+    // Skip SSE for GitHub deployments (logs come from GitHub)
+    if (deployment.executionMethod === 'github') return;
     if (!['planning', 'applying', 'destroying'].includes(deployment.status)) return;
 
     const es = deploymentsApi.getLogs(id);
@@ -101,6 +103,23 @@ export function DeploymentDetailPage() {
           <dl className="space-y-3">
             <div><dt className="text-sm text-gray-500">Template</dt><dd className="font-medium">{deployment.template?.name}</dd></div>
             <div><dt className="text-sm text-gray-500">Cloud Connection</dt><dd className="font-medium">{deployment.cloudConnection?.name}</dd></div>
+            <div>
+              <dt className="text-sm text-gray-500">Execution Method</dt>
+              <dd className="font-medium">{deployment.executionMethod === 'github' ? 'GitHub Actions' : 'Local'}</dd>
+            </div>
+            {deployment.executionMethod === 'github' && deployment.githubRepo && (
+              <div><dt className="text-sm text-gray-500">GitHub Repo</dt><dd className="font-medium">{deployment.githubRepo}</dd></div>
+            )}
+            {deployment.executionMethod === 'github' && deployment.githubRunUrl && (
+              <div>
+                <dt className="text-sm text-gray-500">GitHub Run</dt>
+                <dd>
+                  <a href={deployment.githubRunUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline font-medium inline-flex items-center gap-1">
+                    View on GitHub <ExternalLink className="w-3 h-3" />
+                  </a>
+                </dd>
+              </div>
+            )}
             <div><dt className="text-sm text-gray-500">Created By</dt><dd className="font-medium">{deployment.createdBy?.displayName}</dd></div>
             <div><dt className="text-sm text-gray-500">Created At</dt><dd className="font-medium">{new Date(deployment.createdAt).toLocaleString()}</dd></div>
           </dl>

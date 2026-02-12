@@ -2,6 +2,7 @@ import { prisma } from '../../prisma';
 import { NotFoundError, AppError } from '../../utils/errors';
 import { deploymentQueue } from './deployment-queue';
 import * as terraformRunner from './terraform-runner';
+import * as githubExecutor from './github-executor';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
@@ -41,7 +42,7 @@ export async function get(id: string) {
   return formatDeployment(deployment);
 }
 
-export async function create(data: { name: string; templateId: string; cloudConnectionId: string; variables: Record<string, string> }, userId: string) {
+export async function create(data: { name: string; templateId: string; cloudConnectionId: string; variables: Record<string, string>; executionMethod?: string; githubRepo?: string; githubWorkflowId?: string; githubRef?: string }, userId: string) {
   const template = await prisma.template.findUnique({ where: { id: data.templateId } });
   if (!template) throw new NotFoundError('Template');
 
@@ -52,12 +53,18 @@ export async function create(data: { name: string; templateId: string; cloudConn
     throw new AppError(400, `Cloud connection provider (${connection.provider}) doesn't match template provider (${template.provider})`);
   }
 
+  const executionMethod = data.executionMethod || 'local';
+
   const deployment = await prisma.deployment.create({
     data: {
       name: data.name,
       templateId: data.templateId,
       cloudConnectionId: data.cloudConnectionId,
       variables: JSON.stringify(data.variables),
+      executionMethod,
+      githubRepo: data.githubRepo || null,
+      githubWorkflowId: data.githubWorkflowId || null,
+      githubRef: data.githubRef || null,
       createdById: userId,
     },
     include: {
@@ -67,12 +74,21 @@ export async function create(data: { name: string; templateId: string; cloudConn
     },
   });
 
-  // Enqueue plan + apply
-  deploymentQueue.enqueue({
-    deploymentId: deployment.id,
-    action: 'plan_and_apply',
-    execute: () => executePlanAndApply(deployment.id),
-  });
+  if (executionMethod === 'github') {
+    githubExecutor.dispatchAndTrack(deployment.id, userId).catch((err) => {
+      logger.error(`GitHub dispatch failed for deployment ${deployment.id}`, { error: (err as Error).message });
+      prisma.deployment.update({
+        where: { id: deployment.id },
+        data: { status: 'failed', errorMessage: (err as Error).message },
+      }).catch(() => {});
+    });
+  } else {
+    deploymentQueue.enqueue({
+      deploymentId: deployment.id,
+      action: 'plan_and_apply',
+      execute: () => executePlanAndApply(deployment.id),
+    });
+  }
 
   return formatDeployment(deployment);
 }
@@ -158,13 +174,23 @@ export async function destroyDeployment(id: string, userId: string) {
     throw new AppError(400, 'Can only destroy succeeded deployments');
   }
 
-  await prisma.deployment.update({ where: { id }, data: { status: 'destroying' } });
-
-  deploymentQueue.enqueue({
-    deploymentId: id,
-    action: 'destroy',
-    execute: () => executeDestroy(id),
-  });
+  if (deployment.executionMethod === 'github') {
+    await prisma.deployment.update({ where: { id }, data: { status: 'destroying' } });
+    githubExecutor.dispatchDestroy(id, userId).catch((err) => {
+      logger.error(`GitHub destroy dispatch failed for deployment ${id}`, { error: (err as Error).message });
+      prisma.deployment.update({
+        where: { id },
+        data: { status: 'failed', errorMessage: (err as Error).message },
+      }).catch(() => {});
+    });
+  } else {
+    await prisma.deployment.update({ where: { id }, data: { status: 'destroying' } });
+    deploymentQueue.enqueue({
+      deploymentId: id,
+      action: 'destroy',
+      execute: () => executeDestroy(id),
+    });
+  }
 
   return get(id);
 }
@@ -237,6 +263,9 @@ function formatDeployment(d: any) {
     destroyOutput: d.destroyOutput,
     outputs: d.outputs ? JSON.parse(d.outputs) : null,
     errorMessage: d.errorMessage,
+    executionMethod: d.executionMethod || 'local',
+    githubRepo: d.githubRepo || null,
+    githubRunUrl: d.githubRunUrl || null,
     createdById: d.createdById,
     createdBy: d.createdBy,
     createdAt: d.createdAt.toISOString(),

@@ -116,6 +116,12 @@ model Deployment {
   outputs           String?  // JSON of terraform outputs
   terraformState    String?  // terraform state file content
   errorMessage      String?
+  executionMethod   String   @default("local")  // "local" or "github"
+  githubRepo        String?  // "owner/repo"
+  githubWorkflowId  String?  // workflow ID
+  githubRef         String?  // branch/tag ref
+  githubRunId       String?  // run ID once dispatched
+  githubRunUrl      String?  // URL to GitHub Actions run
   createdById       String
   createdBy         User     @relation(fields: [createdById], references: [id])
   createdAt         DateTime @default(now())

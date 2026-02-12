@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { templatesApi } from '../../api/templates';
 import { cloudConnectionsApi } from '../../api/cloud-connections';
 import { deploymentsApi } from '../../api/deployments';
+import { githubApi } from '../../api/github';
+import { settingsApi } from '../../api/settings';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -19,6 +21,10 @@ export function DeployPage() {
   const [connectionId, setConnectionId] = useState('');
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [executionMethod, setExecutionMethod] = useState<'local' | 'github'>('local');
+  const [githubRepo, setGithubRepo] = useState('');
+  const [githubWorkflowId, setGithubWorkflowId] = useState('');
+  const [githubRef, setGithubRef] = useState('main');
 
   const { data: template } = useQuery({
     queryKey: ['template', slug],
@@ -30,6 +36,57 @@ export function DeployPage() {
     queryKey: ['cloudConnections'],
     queryFn: cloudConnectionsApi.list,
   });
+
+  const { data: githubConnection } = useQuery({
+    queryKey: ['github-connection'],
+    queryFn: githubApi.getConnection,
+    enabled: executionMethod === 'github',
+    retry: false,
+  });
+
+  const { data: repos = [] } = useQuery({
+    queryKey: ['github-repos'],
+    queryFn: githubApi.listRepos,
+    enabled: executionMethod === 'github' && !!githubConnection,
+  });
+
+  const selectedRepoFullName = repos.find((r) => r.fullName === githubRepo)?.fullName || '';
+  const [repoOwner, repoName] = selectedRepoFullName ? selectedRepoFullName.split('/') : ['', ''];
+
+  const { data: workflows = [] } = useQuery({
+    queryKey: ['github-workflows', repoOwner, repoName],
+    queryFn: () => githubApi.listWorkflows(repoOwner, repoName),
+    enabled: executionMethod === 'github' && !!repoOwner && !!repoName,
+  });
+
+  const { data: settings = {} } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsApi.getAll,
+    enabled: executionMethod === 'github',
+  });
+
+  // Pre-populate from admin defaults when switching to GitHub
+  useEffect(() => {
+    if (executionMethod === 'github' && settings) {
+      if (settings['github.defaultRepo'] && !githubRepo) {
+        setGithubRepo(settings['github.defaultRepo']);
+      }
+      if (settings['github.defaultRef'] && githubRef === 'main') {
+        setGithubRef(settings['github.defaultRef']);
+      }
+    }
+  }, [executionMethod, settings]);
+
+  // Pre-populate workflow from admin defaults when workflows load
+  useEffect(() => {
+    if (executionMethod === 'github' && settings && workflows.length > 0 && !githubWorkflowId) {
+      const defaultWorkflow = settings['github.defaultWorkflow'];
+      if (defaultWorkflow) {
+        const match = workflows.find((w) => w.path.endsWith(defaultWorkflow) || String(w.id) === defaultWorkflow || w.name === defaultWorkflow);
+        if (match) setGithubWorkflowId(String(match.id));
+      }
+    }
+  }, [executionMethod, settings, workflows]);
 
   const filteredConnections = connections.filter((c) => c.provider === template?.provider);
 
@@ -43,6 +100,12 @@ export function DeployPage() {
         templateId: template.id,
         cloudConnectionId: connectionId,
         variables,
+        executionMethod,
+        ...(executionMethod === 'github' && {
+          githubRepo,
+          githubWorkflowId,
+          githubRef,
+        }),
       });
       toast.success('Deployment started!');
       navigate(`/deployments/${deployment.id}`);
@@ -56,6 +119,8 @@ export function DeployPage() {
   if (!template) {
     return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
   }
+
+  const isGithubReady = executionMethod !== 'github' || (githubRepo && githubWorkflowId);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -79,6 +144,70 @@ export function DeployPage() {
           </div>
         </Card>
 
+        <Card title="Execution Method">
+          <div className="space-y-4">
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="executionMethod"
+                  value="local"
+                  checked={executionMethod === 'local'}
+                  onChange={() => setExecutionMethod('local')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm font-medium">Local (Server)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="executionMethod"
+                  value="github"
+                  checked={executionMethod === 'github'}
+                  onChange={() => setExecutionMethod('github')}
+                  className="text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm font-medium">GitHub Actions</span>
+              </label>
+            </div>
+
+            {executionMethod === 'github' && !githubConnection && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+                You need to connect your GitHub account first.{' '}
+                <Link to="/github" className="text-primary-600 hover:underline font-medium">Connect GitHub</Link>
+              </div>
+            )}
+
+            {executionMethod === 'github' && githubConnection && (
+              <div className="space-y-4">
+                <Select
+                  label="GitHub Repository *"
+                  options={repos.map((r) => ({ value: r.fullName, label: r.fullName }))}
+                  value={githubRepo}
+                  onChange={(e) => {
+                    setGithubRepo(e.target.value);
+                    setGithubWorkflowId('');
+                  }}
+                />
+                {githubRepo && (
+                  <Select
+                    label="Workflow *"
+                    options={workflows.map((w) => ({ value: String(w.id), label: `${w.name} (${w.path})` }))}
+                    value={githubWorkflowId}
+                    onChange={(e) => setGithubWorkflowId(e.target.value)}
+                  />
+                )}
+                <Input
+                  label="Branch / Ref"
+                  value={githubRef}
+                  onChange={(e) => setGithubRef(e.target.value)}
+                  placeholder="main"
+                />
+              </div>
+            )}
+          </div>
+        </Card>
+
         {template.variables.length > 0 && (
           <Card title="Template Variables">
             <DynamicForm
@@ -90,7 +219,7 @@ export function DeployPage() {
         )}
 
         <div className="flex justify-end">
-          <Button type="submit" loading={loading} disabled={!name || !connectionId}>
+          <Button type="submit" loading={loading} disabled={!name || !connectionId || !isGithubReady}>
             <Rocket className="w-4 h-4 mr-2" /> Deploy
           </Button>
         </div>

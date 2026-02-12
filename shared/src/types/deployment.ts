@@ -6,7 +6,9 @@ export type DeploymentStatus =
   | 'succeeded'
   | 'failed'
   | 'destroying'
-  | 'destroyed';
+  | 'destroyed'
+  | 'dispatched'
+  | 'running';
 
 export interface Deployment {
   id: string;
@@ -22,6 +24,9 @@ export interface Deployment {
   destroyOutput: string | null;
   outputs: Record<string, string> | null;
   errorMessage: string | null;
+  executionMethod: 'local' | 'github';
+  githubRepo?: string | null;
+  githubRunUrl?: string | null;
   createdById: string;
   createdBy?: { id: string; displayName: string };
   createdAt: string;
@@ -33,6 +38,10 @@ export interface CreateDeploymentRequest {
   templateId: string;
   cloudConnectionId: string;
   variables: Record<string, string>;
+  executionMethod: 'local' | 'github';
+  githubRepo?: string;
+  githubWorkflowId?: string;
+  githubRef?: string;
 }
 
 export interface DeploymentLogEvent {
