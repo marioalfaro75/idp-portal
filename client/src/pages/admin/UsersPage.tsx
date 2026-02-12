@@ -18,6 +18,8 @@ export function UsersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', displayName: '', roleId: '' });
   const [loading, setLoading] = useState(false);
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({ displayName: '', email: '', roleId: '', isActive: true, password: '' });
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ['users'], queryFn: usersApi.list });
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: rolesApi.list });
@@ -38,13 +40,39 @@ export function UsersPage() {
     }
   };
 
-  const handleToggleActive = async (user: User) => {
+  const handleEdit = (user: User) => {
+    setEditUser(user);
+    setEditForm({
+      displayName: user.displayName,
+      email: user.email,
+      roleId: user.role?.id || '',
+      isActive: user.isActive,
+      password: '',
+    });
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editUser) return;
+    setLoading(true);
     try {
-      await usersApi.update(user.id, { isActive: !user.isActive });
-      toast.success(`User ${user.isActive ? 'disabled' : 'enabled'}`);
+      const payload: Record<string, unknown> = {
+        displayName: editForm.displayName,
+        email: editForm.email,
+        roleId: editForm.roleId,
+        isActive: editForm.isActive,
+      };
+      if (editForm.password) {
+        payload.password = editForm.password;
+      }
+      await usersApi.update(editUser.id, payload);
+      toast.success('User updated');
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      setEditUser(null);
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message || 'Failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -68,7 +96,7 @@ export function UsersPage() {
     {
       key: 'actions', header: '', render: (u: User) => (
         <div className="flex gap-2">
-          <button onClick={() => handleToggleActive(u)} className="p-1 hover:bg-gray-100 rounded text-gray-500" title={u.isActive ? 'Disable' : 'Enable'}>
+          <button onClick={() => handleEdit(u)} className="p-1 hover:bg-gray-100 rounded text-gray-500" title="Edit user">
             <Edit className="w-4 h-4" />
           </button>
           <button onClick={() => handleDelete(u.id)} className="p-1 hover:bg-gray-100 rounded text-red-500" title="Delete">
@@ -95,6 +123,19 @@ export function UsersPage() {
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button type="submit" loading={loading}>Create</Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal open={!!editUser} onClose={() => setEditUser(null)} title="Edit User">
+        <form onSubmit={handleUpdate} className="space-y-4">
+          <Input label="Display Name" value={editForm.displayName} onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })} required />
+          <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+          <Select label="Role" options={roles.map((r) => ({ value: r.id, label: r.name }))} value={editForm.roleId} onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })} />
+          <Select label="Status" options={[{ value: 'true', label: 'Active' }, { value: 'false', label: 'Disabled' }]} value={String(editForm.isActive)} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.value === 'true' })} />
+          <Input label="New Password" type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} minLength={8} placeholder="Leave blank to keep current" />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" type="button" onClick={() => setEditUser(null)}>Cancel</Button>
+            <Button type="submit" loading={loading}>Save</Button>
           </div>
         </form>
       </Modal>
