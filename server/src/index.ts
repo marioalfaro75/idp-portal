@@ -19,6 +19,8 @@ import auditRoutes from './modules/audit/audit.routes';
 import settingsRoutes from './modules/settings/settings.routes';
 import { checkTerraformAvailable } from './modules/deployments/terraform-runner';
 import { pollGitHubDeployments } from './modules/deployments/github-executor';
+import servicesRoutes from './modules/services/services.routes';
+import { pollWorkflowRuns } from './modules/services/workflow-poller';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,6 +40,7 @@ app.use('/api/deployments', deploymentsRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/services', servicesRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -57,6 +60,9 @@ app.listen(PORT, () => {
 
   // Start GitHub deployment poller
   setInterval(pollGitHubDeployments, 30_000);
+
+  // Start workflow run poller
+  setInterval(pollWorkflowRuns, 30_000);
 });
 
 export default app;

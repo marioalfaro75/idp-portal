@@ -23,6 +23,8 @@ model User {
   githubConnection GitHubConnection?
   deployments      Deployment[]
   auditLogs        AuditLog[]
+  services         Service[]       @relation("UserServices")
+  workflowRuns     WorkflowRun[]   @relation("UserWorkflowRuns")
 }
 
 model Role {
@@ -95,10 +97,13 @@ model Template {
   variables    String   @default("[]") // JSON array of TemplateVariable
   outputs      String   @default("[]") // JSON array of TemplateOutput
   tags         String   @default("[]") // JSON array of strings
+  workflow     String?
+  hasScaffold  Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   deployments Deployment[]
+  services    Service[]
 }
 
 model Deployment {
@@ -138,6 +143,42 @@ model AuditLog {
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   ipAddress  String?
   createdAt  DateTime @default(now())
+}
+
+model Service {
+  id             String   @id @default(uuid())
+  name           String
+  slug           String   @unique
+  status         String   @default("scaffolding") // scaffolding, active, failed, archived
+  templateId     String
+  template       Template @relation(fields: [templateId], references: [id])
+  githubRepoUrl  String   @default("")
+  githubRepoSlug String   @default("")  // "owner/repo"
+  parameters     String   @default("{}")
+  errorMessage   String?
+  createdById    String
+  createdBy      User     @relation("UserServices", fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workflowRuns   WorkflowRun[]
+}
+
+model WorkflowRun {
+  id            String    @id @default(uuid())
+  serviceId     String
+  service       Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  githubRunId   String?
+  githubRunUrl  String?
+  workflowName  String    @default("")
+  status        String    @default("pending") // pending, queued, in_progress, completed, failed
+  conclusion    String?
+  triggerType   String    @default("scaffold") // scaffold, manual, retry
+  triggeredById String
+  triggeredBy   User      @relation("UserWorkflowRuns", fields: [triggeredById], references: [id])
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model SystemSetting {

@@ -1,0 +1,9 @@
+{
+  "name": "AWS Microservice",
+  "description": "Scaffolds a new microservice with Express.js, Terraform infrastructure (ECR + ECS), and a GitHub Actions CI/CD workflow.",
+  "provider": "aws",
+  "category": "compute",
+  "version": "1.0.0",
+  "tags": ["aws", "microservice", "ecs", "ecr", "express", "scaffold"],
+  "workflow": "deploy.yml"
+}

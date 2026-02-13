@@ -11,6 +11,13 @@ interface ParsedTemplate {
   variables: TemplateVariable[];
   outputs: TemplateOutput[];
   templatePath: string;
+  hasScaffold: boolean;
+  workflow: string | null;
+}
+
+export interface ScaffoldFile {
+  path: string;
+  content: string;
 }
 
 export function scanTemplates(): ParsedTemplate[] {
@@ -45,6 +52,9 @@ export function scanTemplates(): ParsedTemplate[] {
         const variables = parseVariables(templateDir);
         const outputs = parseOutputs(templateDir);
         const slug = dir;
+        const scaffoldDir = path.join(templateDir, 'scaffold');
+        const hasScaffold = fs.existsSync(scaffoldDir) && fs.statSync(scaffoldDir).isDirectory();
+        const workflow = metadata.workflow || null;
 
         templates.push({
           slug,
@@ -52,6 +62,8 @@ export function scanTemplates(): ParsedTemplate[] {
           variables,
           outputs,
           templatePath: path.relative(process.cwd(), templateDir),
+          hasScaffold,
+          workflow,
         });
       } catch (err) {
         logger.error(`Failed to parse template ${provider}/${dir}`, { error: (err as Error).message });
@@ -126,4 +138,35 @@ function extractField(block: string, field: string): string | undefined {
   if (match2) return match2[1];
 
   return undefined;
+}
+
+export function readScaffoldFiles(
+  templatePath: string,
+  variables: Record<string, string>,
+): ScaffoldFile[] {
+  const scaffoldDir = path.resolve(process.cwd(), templatePath, 'scaffold');
+  if (!fs.existsSync(scaffoldDir)) return [];
+
+  const files: ScaffoldFile[] = [];
+
+  function walk(dir: string, base: string) {
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      const relativePath = base ? `${base}/${entry}` : entry;
+      if (fs.statSync(fullPath).isDirectory()) {
+        walk(fullPath, relativePath);
+      } else {
+        let content = fs.readFileSync(fullPath, 'utf-8');
+        // Replace {{var}} placeholders with variable values
+        for (const [key, value] of Object.entries(variables)) {
+          content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+        }
+        files.push({ path: relativePath, content });
+      }
+    }
+  }
+
+  walk(scaffoldDir, '');
+  return files;
 }

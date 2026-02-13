@@ -2,6 +2,7 @@ import { Octokit } from '@octokit/rest';
 import { prisma } from '../../prisma';
 import { NotFoundError, AppError } from '../../utils/errors';
 import { encrypt, decrypt } from '../../utils/crypto';
+import { logger } from '../../utils/logger';
 
 export async function getConnection(userId: string) {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -98,4 +99,129 @@ export async function dispatchWorkflow(userId: string, owner: string, repo: stri
     ref,
     inputs,
   });
+}
+
+export async function createRepo(
+  userId: string,
+  name: string,
+  description: string,
+  isPrivate: boolean,
+): Promise<{ owner: string; repo: string; fullName: string; htmlUrl: string }> {
+  const octokit = await getOctokit(userId);
+  const { data } = await octokit.repos.createForAuthenticatedUser({
+    name,
+    description,
+    private: isPrivate,
+    auto_init: true,
+  });
+  return {
+    owner: data.owner.login,
+    repo: data.name,
+    fullName: data.full_name,
+    htmlUrl: data.html_url,
+  };
+}
+
+export async function pushScaffoldFiles(
+  userId: string,
+  owner: string,
+  repo: string,
+  files: Array<{ path: string; content: string }>,
+): Promise<void> {
+  const octokit = await getOctokit(userId);
+
+  // Get the reference to main branch
+  const { data: ref } = await octokit.git.getRef({ owner, repo, ref: 'heads/main' });
+  const baseSha = ref.object.sha;
+
+  // Get the commit to find the base tree
+  const { data: commit } = await octokit.git.getCommit({ owner, repo, commit_sha: baseSha });
+  const baseTreeSha = commit.tree.sha;
+
+  // Create blobs for each file
+  const tree: Array<{ path: string; mode: '100644'; type: 'blob'; sha: string }> = [];
+  for (const file of files) {
+    const { data: blob } = await octokit.git.createBlob({
+      owner,
+      repo,
+      content: Buffer.from(file.content).toString('base64'),
+      encoding: 'base64',
+    });
+    tree.push({ path: file.path, mode: '100644', type: 'blob', sha: blob.sha });
+  }
+
+  // Create tree
+  const { data: newTree } = await octokit.git.createTree({
+    owner,
+    repo,
+    base_tree: baseTreeSha,
+    tree,
+  });
+
+  // Create commit
+  const { data: newCommit } = await octokit.git.createCommit({
+    owner,
+    repo,
+    message: 'Initial scaffold from IDP Portal',
+    tree: newTree.sha,
+    parents: [baseSha],
+  });
+
+  // Update ref
+  await octokit.git.updateRef({
+    owner,
+    repo,
+    ref: 'heads/main',
+    sha: newCommit.sha,
+  });
+}
+
+export async function dispatchWorkflowByName(
+  userId: string,
+  owner: string,
+  repo: string,
+  filename: string,
+  ref: string,
+  inputs?: Record<string, string>,
+): Promise<{ runId: string; runUrl: string } | null> {
+  const octokit = await getOctokit(userId);
+  const dispatchedAt = new Date();
+
+  await octokit.actions.createWorkflowDispatch({
+    owner,
+    repo,
+    workflow_id: filename,
+    ref,
+    inputs,
+  });
+
+  // Wait for run to appear
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const { data } = await octokit.actions.listWorkflowRuns({
+        owner,
+        repo,
+        workflow_id: filename,
+        event: 'workflow_dispatch',
+        per_page: 5,
+      });
+
+      const run = data.workflow_runs.find(
+        (r) => new Date(r.created_at) >= dispatchedAt,
+      );
+
+      if (run) {
+        return { runId: String(run.id), runUrl: run.html_url };
+      }
+    } catch (err) {
+      logger.warn(`Attempt ${attempt + 1} to find workflow run failed`, { error: (err as Error).message });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+
+  logger.warn(`Could not find workflow run for ${owner}/${repo}/${filename} after retries`);
+  return null;
 }

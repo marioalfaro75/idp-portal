@@ -15,6 +15,9 @@ export const PERMISSIONS = {
   DEPLOYMENTS_DESTROY: 'deployments.destroy',
   GITHUB_MANAGE: 'github.manage',
   AUDIT_LOGS_VIEW: 'audit_logs.view',
+  SERVICES_LIST: 'services.list',
+  SERVICES_CREATE: 'services.create',
+  SERVICES_MANAGE: 'services.manage',
   SETTINGS_MANAGE: 'settings.manage',
 } as const;
 
@@ -36,6 +39,8 @@ export const SYSTEM_ROLES = {
       PERMISSIONS.DEPLOYMENTS_CREATE,
       PERMISSIONS.DEPLOYMENTS_DESTROY,
       PERMISSIONS.GITHUB_MANAGE,
+      PERMISSIONS.SERVICES_LIST,
+      PERMISSIONS.SERVICES_CREATE,
     ],
   },
   VIEWER: {
@@ -44,6 +49,7 @@ export const SYSTEM_ROLES = {
       PERMISSIONS.CLOUD_CONNECTIONS_LIST,
       PERMISSIONS.TEMPLATES_LIST,
       PERMISSIONS.DEPLOYMENTS_LIST,
+      PERMISSIONS.SERVICES_LIST,
     ],
   },
 } as const;

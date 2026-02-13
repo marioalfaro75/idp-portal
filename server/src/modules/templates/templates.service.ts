@@ -46,6 +46,8 @@ export async function sync(): Promise<number> {
         variables: JSON.stringify(t.variables),
         outputs: JSON.stringify(t.outputs),
         tags: JSON.stringify(t.metadata.tags),
+        workflow: t.workflow,
+        hasScaffold: t.hasScaffold,
       },
       update: {
         name: t.metadata.name,
@@ -57,6 +59,8 @@ export async function sync(): Promise<number> {
         variables: JSON.stringify(t.variables),
         outputs: JSON.stringify(t.outputs),
         tags: JSON.stringify(t.metadata.tags),
+        workflow: t.workflow,
+        hasScaffold: t.hasScaffold,
       },
     });
   }
@@ -77,6 +81,8 @@ function formatTemplate(t: any) {
     variables: JSON.parse(t.variables),
     outputs: JSON.parse(t.outputs),
     tags: JSON.parse(t.tags),
+    workflow: t.workflow || null,
+    hasScaffold: t.hasScaffold || false,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
   };

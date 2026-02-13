@@ -5,3 +5,4 @@ export * from './template';
 export * from './deployment';
 export * from './github';
 export * from './audit';
+export * from './service';

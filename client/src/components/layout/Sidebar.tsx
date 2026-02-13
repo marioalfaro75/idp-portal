@@ -4,12 +4,13 @@ import { useUiStore } from '../../stores/ui-store';
 import { PERMISSIONS } from '@idp/shared';
 import {
   LayoutDashboard, Layers, Rocket, Cloud, GitBranch,
-  Users, Shield, FileText, Settings, ChevronLeft, ChevronRight,
+  Users, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/templates', label: 'Templates', icon: Layers, permission: PERMISSIONS.TEMPLATES_LIST },
+  { to: '/services', label: 'Services', icon: Box, permission: PERMISSIONS.SERVICES_LIST },
   { to: '/deployments', label: 'Deployments', icon: Rocket, permission: PERMISSIONS.DEPLOYMENTS_LIST },
   { to: '/cloud-connections', label: 'Cloud Connections', icon: Cloud, permission: PERMISSIONS.CLOUD_CONNECTIONS_LIST },
   { to: '/github', label: 'GitHub', icon: GitBranch, permission: PERMISSIONS.GITHUB_MANAGE },

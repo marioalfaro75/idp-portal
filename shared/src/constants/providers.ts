@@ -30,3 +30,18 @@ export const DEPLOYMENT_STATUSES = [
   'destroying',
   'destroyed',
 ] as const;
+
+export const SERVICE_STATUSES = [
+  'scaffolding',
+  'active',
+  'failed',
+  'archived',
+] as const;
+
+export const WORKFLOW_RUN_STATUSES = [
+  'pending',
+  'queued',
+  'in_progress',
+  'completed',
+  'failed',
+] as const;

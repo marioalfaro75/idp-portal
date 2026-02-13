@@ -10,6 +10,9 @@ import { TemplateDetailPage } from './pages/templates/TemplateDetailPage';
 import { DeployPage } from './pages/templates/DeployPage';
 import { DeploymentListPage } from './pages/deployments/DeploymentListPage';
 import { DeploymentDetailPage } from './pages/deployments/DeploymentDetailPage';
+import { ScaffoldPage } from './pages/services/ScaffoldPage';
+import { ServiceCatalogPage } from './pages/services/ServiceCatalogPage';
+import { ServiceDetailPage } from './pages/services/ServiceDetailPage';
 import { CloudConnectionsPage } from './pages/cloud-connections/CloudConnectionsPage';
 import { GitHubPage } from './pages/github/GitHubPage';
 import { UsersPage } from './pages/admin/UsersPage';
@@ -33,6 +36,9 @@ export const router = createBrowserRouter([
       { path: 'templates', element: <TemplateCatalogPage /> },
       { path: 'templates/:slug', element: <TemplateDetailPage /> },
       { path: 'templates/:slug/deploy', element: <DeployPage /> },
+      { path: 'templates/:slug/scaffold', element: <ScaffoldPage /> },
+      { path: 'services', element: <ServiceCatalogPage /> },
+      { path: 'services/:id', element: <ServiceDetailPage /> },
       { path: 'deployments', element: <DeploymentListPage /> },
       { path: 'deployments/:id', element: <DeploymentDetailPage /> },
       { path: 'cloud-connections', element: <CloudConnectionsPage /> },

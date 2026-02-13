@@ -6,7 +6,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS } from '@idp/shared';
-import { ArrowLeft, Rocket } from 'lucide-react';
+import { ArrowLeft, Rocket, Box } from 'lucide-react';
 
 export function TemplateDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -36,7 +36,14 @@ export function TemplateDetailPage() {
           <h1 className="text-2xl font-bold">{template.name}</h1>
           <p className="text-gray-500">{template.description}</p>
         </div>
-        {hasPermission(PERMISSIONS.DEPLOYMENTS_CREATE) && (
+        {template.hasScaffold && hasPermission(PERMISSIONS.SERVICES_CREATE) && (
+          <Link to={`/templates/${slug}/scaffold`}>
+            <Button>
+              <Box className="w-4 h-4 mr-2" /> Scaffold Service
+            </Button>
+          </Link>
+        )}
+        {!template.hasScaffold && hasPermission(PERMISSIONS.DEPLOYMENTS_CREATE) && (
           <Link to={`/templates/${slug}/deploy`}>
             <Button>
               <Rocket className="w-4 h-4 mr-2" /> Deploy

@@ -33,6 +33,7 @@ export interface TemplateMetadata {
   category: TemplateCategory;
   version: string;
   tags: string[];
+  workflow?: string;
 }
 
 export interface Template {
@@ -47,6 +48,8 @@ export interface Template {
   variables: TemplateVariable[];
   outputs: TemplateOutput[];
   tags: string[];
+  workflow: string | null;
+  hasScaffold: boolean;
   createdAt: string;
   updatedAt: string;
 }
