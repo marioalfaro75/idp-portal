@@ -248,6 +248,15 @@ async function executeDestroy(deploymentId: string) {
   }
 }
 
+const STALE_STATUSES = ['failed', 'destroyed', 'pending', 'planned'];
+
+export async function cleanupStale() {
+  const result = await prisma.deployment.deleteMany({
+    where: { status: { in: STALE_STATUSES } },
+  });
+  return { deleted: result.count };
+}
+
 function formatDeployment(d: any) {
   return {
     id: d.id,

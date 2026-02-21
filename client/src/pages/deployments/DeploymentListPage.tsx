@@ -1,9 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { deploymentsApi } from '../../api/deployments';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
+import { useAuthStore } from '../../stores/auth-store';
+import { PERMISSIONS } from '@idp/shared';
+import { Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { Deployment } from '@idp/shared';
 
 const statusVariant = (status: string) => {
@@ -17,11 +23,31 @@ const statusVariant = (status: string) => {
 };
 
 export function DeploymentListPage() {
+  const { hasPermission, user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [cleaningUp, setCleaningUp] = useState(false);
+
   const { data: deployments = [], isLoading } = useQuery({
     queryKey: ['deployments'],
     queryFn: deploymentsApi.list,
     refetchInterval: 5000,
   });
+
+  const canCleanup = hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) && user?.role?.name === 'Admin';
+
+  const handleCleanup = async () => {
+    if (!confirm('This will permanently delete all deployments in failed, destroyed, pending, and planned states. Continue?')) return;
+    setCleaningUp(true);
+    try {
+      const result = await deploymentsApi.cleanupStale();
+      toast.success(`Cleaned up ${result.deleted} stale deployment${result.deleted === 1 ? '' : 's'}`);
+      queryClient.invalidateQueries({ queryKey: ['deployments'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Cleanup failed');
+    } finally {
+      setCleaningUp(false);
+    }
+  };
 
   const columns = [
     {
@@ -75,7 +101,14 @@ export function DeploymentListPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Deployments</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Deployments</h1>
+        {canCleanup && (
+          <Button variant="danger" onClick={handleCleanup} loading={cleaningUp}>
+            <Trash2 className="w-4 h-4 mr-2" /> Clean Up
+          </Button>
+        )}
+      </div>
       <Card>
         <Table columns={columns} data={deployments} emptyMessage="No deployments yet" />
       </Card>

@@ -18,6 +18,12 @@ router.get('/', authorize(PERMISSIONS.DEPLOYMENTS_LIST), asyncHandler(async (_re
   res.json(deployments);
 }));
 
+router.delete('/stale', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHandler(async (req, res) => {
+  const result = await service.cleanupStale();
+  await auditService.log({ action: 'cleanup_stale', resource: 'deployment', resourceId: null as any, userId: req.user!.sub, ipAddress: req.ip, details: { deleted: result.deleted } });
+  res.json(result);
+}));
+
 router.get('/:id', authorize(PERMISSIONS.DEPLOYMENTS_LIST), asyncHandler(async (req, res) => {
   const deployment = await service.get(req.params.id);
   res.json(deployment);
