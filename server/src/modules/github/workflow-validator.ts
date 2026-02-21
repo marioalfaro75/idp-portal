@@ -226,6 +226,219 @@ export function fixSetupTerraformWrapper(content: string): { fixed: string; chan
   return { fixed: result.join('\n'), changed };
 }
 
+/**
+ * Adds a job-level `env:` block that maps cloud credential repo secrets
+ * to environment variables so Terraform can authenticate with the provider.
+ */
+export function fixTerraformEnvVars(content: string, secretNames: string[]): { fixed: string; changed: boolean } {
+  if (secretNames.length === 0) {
+    return { fixed: content, changed: false };
+  }
+
+  // Parse to check existing env vars
+  let doc: any;
+  try {
+    doc = yaml.load(content);
+  } catch {
+    return { fixed: content, changed: false };
+  }
+
+  if (!doc?.jobs || typeof doc.jobs !== 'object') {
+    return { fixed: content, changed: false };
+  }
+
+  // Check first job for existing env vars
+  const jobEntries = Object.entries(doc.jobs) as [string, any][];
+  const [, firstJob] = jobEntries[0] || [];
+  if (!firstJob) return { fixed: content, changed: false };
+
+  const existingEnv = firstJob.env || {};
+  const missingSecrets = secretNames.filter((name) => !(name in existingEnv));
+  if (missingSecrets.length === 0) {
+    return { fixed: content, changed: false };
+  }
+
+  // Build env lines mapping secret names to ${{ secrets.NAME }}
+  const envLines = missingSecrets
+    .map((name) => `      ${name}: \${{ secrets.${name} }}`)
+    .join('\n');
+
+  let fixed = content;
+
+  if (firstJob.env && Object.keys(firstJob.env).length > 0) {
+    // Has existing env block — find it and append
+    const envRegex = /^(\s+)env:\s*$/m;
+    const envMatch = fixed.match(envRegex);
+    if (envMatch) {
+      const envIndent = envMatch[1] + '  ';
+      // Find end of existing env block
+      const afterEnv = (envMatch.index ?? 0) + envMatch[0].length;
+      let endPos = afterEnv;
+      const lines = fixed.slice(afterEnv).split('\n');
+      for (const line of lines) {
+        if (line.trim() === '' || line.startsWith(envIndent)) {
+          endPos += line.length + 1;
+        } else {
+          break;
+        }
+      }
+      fixed = fixed.slice(0, endPos) + envLines + '\n' + fixed.slice(endPos);
+    }
+  } else {
+    // No env block — add one after runs-on or environment line
+    const jobPropRegex = /^(\s+)(runs-on|environment):.*$/gm;
+    let lastMatch: RegExpExecArray | null = null;
+    let m: RegExpExecArray | null;
+    while ((m = jobPropRegex.exec(fixed)) !== null) {
+      lastMatch = m;
+    }
+    if (lastMatch) {
+      const jobIndent = lastMatch[1];
+      const insertPos = lastMatch.index + lastMatch[0].length;
+      fixed = fixed.slice(0, insertPos) + `\n\n${jobIndent}env:\n${envLines}` + fixed.slice(insertPos);
+    }
+  }
+
+  return { fixed, changed: true };
+}
+
+/**
+ * Changes `terraform fmt -check` to `terraform fmt` so it auto-formats
+ * instead of failing on formatting differences in pushed template files.
+ */
+export function fixTerraformFmtCheck(content: string): { fixed: string; changed: boolean } {
+  const fmtCheckRegex = /^(\s*run:\s*)terraform\s+fmt\s+-check\s*$/gm;
+  if (!fmtCheckRegex.test(content)) {
+    return { fixed: content, changed: false };
+  }
+  const fixed = content.replace(
+    /^(\s*run:\s*)terraform\s+fmt\s+-check\s*$/gm,
+    '$1terraform fmt',
+  );
+  return { fixed, changed: true };
+}
+
+/**
+ * Fixes the Terraform Apply step's `if` condition so it runs on workflow_dispatch
+ * events (when action == 'apply') in addition to push events.
+ * Also fixes the Terraform Plan step to save a plan file and the Apply step to use it.
+ */
+export function fixTerraformApplyCondition(content: string): { fixed: string; changed: boolean } {
+  let fixed = content;
+  let changed = false;
+
+  // Fix Apply condition: replace any existing `if:` on the Apply step
+  // Common patterns: `if: github.ref == ... && github.event_name == 'push'`
+  const applyIfRegex = /^(\s*-\s*name:\s*Terraform Apply\s*\n\s*)if:.*$/m;
+  const applyIfMatch = fixed.match(applyIfRegex);
+  if (applyIfMatch) {
+    const newCondition = `${applyIfMatch[1]}if: github.event_name == 'workflow_dispatch' && inputs.action == 'apply'`;
+    fixed = fixed.replace(applyIfMatch[0], newCondition);
+    changed = true;
+  }
+
+  // Fix Plan to use -out=tfplan so Apply can use the saved plan
+  const planRunRegex = /^(\s*run:\s*)terraform\s+plan\s+-input=false\s*$/m;
+  if (planRunRegex.test(fixed) && !/terraform plan.*-out/m.test(fixed)) {
+    fixed = fixed.replace(planRunRegex, '$1terraform plan -input=false -out=tfplan');
+    changed = true;
+  }
+
+  // Fix Apply to use the saved plan file
+  const applyRunRegex = /^(\s*run:\s*)terraform\s+apply\s+-auto-approve\s+-input=false\s*$/m;
+  if (applyRunRegex.test(fixed)) {
+    fixed = fixed.replace(applyRunRegex, '$1terraform apply -auto-approve tfplan');
+    changed = true;
+  }
+
+  return { fixed, changed };
+}
+
+/**
+ * Ensures the job's `defaults.run` block includes `working-directory: terraform`
+ * so that terraform commands execute in the directory where template files are pushed.
+ */
+export function fixWorkingDirectory(content: string): { fixed: string; changed: boolean } {
+  // Parse to check if working-directory is already set
+  let doc: any;
+  try {
+    doc = yaml.load(content);
+  } catch {
+    return { fixed: content, changed: false };
+  }
+
+  if (!doc?.jobs || typeof doc.jobs !== 'object') {
+    return { fixed: content, changed: false };
+  }
+
+  // Check all jobs — if any already has working-directory: terraform, skip
+  const jobs = Object.values(doc.jobs) as any[];
+  const allHaveWorkDir = jobs.every(
+    (job) => job?.defaults?.run?.['working-directory'] === 'terraform',
+  );
+  if (allHaveWorkDir) {
+    return { fixed: content, changed: false };
+  }
+
+  // String-based fix: find `defaults:` blocks and add/update working-directory
+  let fixed = content;
+  let changed = false;
+
+  for (const [jobName, job] of Object.entries(doc.jobs) as [string, any][]) {
+    if (job?.defaults?.run?.['working-directory'] === 'terraform') {
+      continue;
+    }
+
+    if (job?.defaults?.run) {
+      // Has defaults.run but no working-directory (or wrong value)
+      // Find the `shell:` or last property under `run:` within this job's defaults
+      // Look for the run: line under defaults:
+      const runRegex = /^(\s+)run:\s*$/m;
+      const runMatch = fixed.match(runRegex);
+      if (runMatch) {
+        const runIndent = runMatch[1];
+        const propIndent = runIndent + '  ';
+        const insertPos = (runMatch.index ?? 0) + runMatch[0].length;
+        // Check if working-directory already exists as text (might have wrong value)
+        const wdRegex = new RegExp(`^${propIndent}working-directory:.*$`, 'm');
+        const wdMatch = fixed.match(wdRegex);
+        if (wdMatch) {
+          fixed = fixed.replace(wdMatch[0], `${propIndent}working-directory: terraform`);
+        } else {
+          fixed = fixed.slice(0, insertPos) + `\n${propIndent}working-directory: terraform` + fixed.slice(insertPos);
+        }
+        changed = true;
+      }
+    } else if (job?.defaults) {
+      // Has defaults but no run block
+      const defaultsRegex = /^(\s+)defaults:\s*$/m;
+      const defaultsMatch = fixed.match(defaultsRegex);
+      if (defaultsMatch) {
+        const defIndent = defaultsMatch[1];
+        const insertPos = (defaultsMatch.index ?? 0) + defaultsMatch[0].length;
+        fixed = fixed.slice(0, insertPos) + `\n${defIndent}  run:\n${defIndent}    working-directory: terraform` + fixed.slice(insertPos);
+        changed = true;
+      }
+    } else {
+      // No defaults block — add one after runs-on or environment line
+      const jobHeaderRegex = new RegExp(`^(\\s+)(runs-on|environment):.*$`, 'gm');
+      let lastMatch: RegExpExecArray | null = null;
+      let m: RegExpExecArray | null;
+      while ((m = jobHeaderRegex.exec(fixed)) !== null) {
+        lastMatch = m;
+      }
+      if (lastMatch) {
+        const jobIndent = lastMatch[1];
+        const insertPos = lastMatch.index + lastMatch[0].length;
+        fixed = fixed.slice(0, insertPos) + `\n\n${jobIndent}defaults:\n${jobIndent}  run:\n${jobIndent}    working-directory: terraform` + fixed.slice(insertPos);
+        changed = true;
+      }
+    }
+  }
+
+  return { fixed, changed };
+}
+
 function buildInputsBlock(inputs: string[]): string {
   return inputs
     .map(

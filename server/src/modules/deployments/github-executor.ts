@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
+import sodium from 'libsodium-wrappers';
 import { Octokit } from '@octokit/rest';
 import { prisma } from '../../prisma';
 import { decrypt } from '../../utils/crypto';
 import { logger } from '../../utils/logger';
 import { getLogEmitter } from './deployments.service';
+import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { listWorkflows, getWorkflowFileContent, updateWorkflowFile, pushScaffoldFiles } from '../github/github.service';
-import { ensureWorkflowDispatch, fixSetupTerraformWrapper } from '../github/workflow-validator';
+import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars } from '../github/workflow-validator';
 
 async function getOctokit(userId: string): Promise<Octokit> {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -65,6 +67,87 @@ async function pushTemplateFiles(
   }
 }
 
+function buildCredentialSecrets(provider: string, credentials: Record<string, unknown>): Record<string, string> {
+  switch (provider) {
+    case 'aws':
+      return {
+        AWS_ACCESS_KEY_ID: credentials.accessKeyId as string,
+        AWS_SECRET_ACCESS_KEY: credentials.secretAccessKey as string,
+        AWS_DEFAULT_REGION: credentials.region as string,
+      };
+    case 'gcp':
+      return {
+        GOOGLE_PROJECT: credentials.projectId as string,
+        GOOGLE_CREDENTIALS: credentials.serviceAccountKey as string,
+      };
+    case 'azure':
+      return {
+        ARM_SUBSCRIPTION_ID: credentials.subscriptionId as string,
+        ARM_TENANT_ID: credentials.tenantId as string,
+        ARM_CLIENT_ID: credentials.clientId as string,
+        ARM_CLIENT_SECRET: credentials.clientSecret as string,
+      };
+    default:
+      return {};
+  }
+}
+
+async function pushCloudCredentials(
+  deploymentId: string,
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  cloudConnectionId: string,
+  provider: string,
+): Promise<string[]> {
+  const emitter = getLogEmitter(deploymentId);
+
+  const { credentials } = await cloudConnectionService.getDecryptedCredentials(cloudConnectionId);
+  const secrets = buildCredentialSecrets(provider, credentials);
+  const secretNames = Object.keys(secrets).filter((k) => secrets[k]);
+
+  if (secretNames.length === 0) return secretNames;
+
+  await sodium.ready;
+
+  try {
+    // Get the repo's public key for encrypting secrets
+    const { data: publicKey } = await octokit.actions.getRepoPublicKey({ owner, repo });
+
+    emitter.emit('log', { type: 'status', message: `Setting ${secretNames.length} cloud credential secrets on ${owner}/${repo}` });
+
+    for (const [name, value] of Object.entries(secrets)) {
+      if (!value) continue;
+      // Encrypt the secret value using the repo's public key
+      const key = sodium.from_base64(publicKey.key, sodium.base64_variants.ORIGINAL);
+      const encrypted = sodium.crypto_box_seal(sodium.from_string(value), key);
+      const encryptedBase64 = sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL);
+
+      await octokit.actions.createOrUpdateRepoSecret({
+        owner,
+        repo,
+        secret_name: name,
+        encrypted_value: encryptedBase64,
+        key_id: publicKey.key_id,
+      });
+    }
+
+    emitter.emit('log', { type: 'status', message: 'Cloud credentials set as repository secrets' });
+  } catch (err: any) {
+    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+      throw new Error(
+        'GitHub token lacks permission to set repository secrets. ' +
+        'For fine-grained PATs, grant "Secrets: Read and write" permission. ' +
+        'For classic PATs, enable the "repo" scope. ' +
+        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+      );
+    }
+    throw err;
+  }
+
+  return secretNames;
+}
+
 async function ensureWorkflowReady(
   deploymentId: string,
   userId: string,
@@ -72,6 +155,7 @@ async function ensureWorkflowReady(
   repo: string,
   workflowId: string,
   ref: string,
+  credentialSecretNames: string[],
 ): Promise<void> {
   const emitter = getLogEmitter(deploymentId);
   try {
@@ -88,25 +172,31 @@ async function ensureWorkflowReady(
 
     const { content, sha } = await getWorkflowFileContent(userId, owner, repo, filePath, ref);
 
-    // Check workflow_dispatch inputs
+    // Apply all workflow fixes in sequence
     const result = ensureWorkflowDispatch(content);
-    // Check setup-terraform wrapper
     const wrapperFix = fixSetupTerraformWrapper(result.fixed || content);
+    const workDirFix = fixWorkingDirectory(wrapperFix.fixed);
+    const fmtFix = fixTerraformFmtCheck(workDirFix.fixed);
+    const applyFix = fixTerraformApplyCondition(fmtFix.fixed);
+    const envFix = fixTerraformEnvVars(applyFix.fixed, credentialSecretNames);
 
     const allChanges = [...result.changes];
-    if (wrapperFix.changed) {
-      allChanges.push('Set terraform_wrapper: false on setup-terraform');
-    }
+    if (wrapperFix.changed) allChanges.push('Set terraform_wrapper: false on setup-terraform');
+    if (workDirFix.changed) allChanges.push('Set working-directory: terraform for run steps');
+    if (fmtFix.changed) allChanges.push('Changed terraform fmt -check to terraform fmt');
+    if (applyFix.changed) allChanges.push('Fixed Terraform Apply condition for workflow_dispatch');
+    if (envFix.changed) allChanges.push('Added cloud credential env vars from repo secrets');
 
-    const finalContent = wrapperFix.fixed;
-    const needsUpdate = !result.valid || wrapperFix.changed;
+    const finalContent = envFix.fixed;
+    const anyFixApplied = wrapperFix.changed || workDirFix.changed || fmtFix.changed || applyFix.changed || envFix.changed;
+    const needsUpdate = !result.valid || anyFixApplied;
 
     if (!needsUpdate) {
       emitter.emit('log', { type: 'status', message: 'Workflow file validated — all required inputs present' });
       return;
     }
 
-    if (!result.valid && !result.fixed && !wrapperFix.changed) {
+    if (!result.valid && !result.fixed && !anyFixApplied) {
       emitter.emit('log', { type: 'warning', message: `Workflow validation failed: ${result.changes.join('; ')}. Proceeding with dispatch anyway.` });
       return;
     }
@@ -139,7 +229,8 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   const variables = JSON.parse(deployment.variables);
 
   await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
-  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref);
+  const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
   const dispatchedAt = new Date();
 
@@ -202,7 +293,8 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   const variables = JSON.parse(deployment.variables);
 
   await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
-  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref);
+  const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
   const dispatchedAt = new Date();
 
