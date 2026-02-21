@@ -53,7 +53,7 @@ Modules: auth, users, roles, cloud-connections, templates, deployments, github, 
 
 - `client/src/api/` — Axios-based API modules (one per feature). Axios interceptor auto-attaches JWT and redirects on 401.
 - `client/src/pages/` — Route-level page components organized by feature
-- `client/src/components/ui/` — Reusable primitives (Button, Input, Select, Card, Badge, Modal, Table)
+- `client/src/components/ui/` — Reusable primitives (Button, Input, Select, Card, Badge, Modal, Table). Table component supports resizable columns, sticky headers, custom scrollbars, and responsive mobile card layout.
 - `client/src/components/guards/` — AuthGuard, RoleGuard for access control
 - `client/src/stores/` — Zustand stores (auth-store, ui-store)
 - `client/src/hooks/` — Custom hooks wrapping React Query for data fetching

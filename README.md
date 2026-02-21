@@ -15,8 +15,11 @@ Without a portal, each engineer must install Terraform locally, manage credentia
 - **Cloud Credential Management** — Centrally store and manage cloud provider credentials encrypted with AES-256-GCM
 - **GitHub Integration** — Connect GitHub accounts, dispatch workflows, and track workflow runs
 - **Role-Based Access Control** — 20 granular permissions with 3 system roles (Admin, Editor, Viewer) and support for custom roles
+- **Deployment Cleanup** — Admin-only bulk removal of stale deployments (failed, destroyed, pending, planned)
+- **Dark/Light Mode** — Toggle between dark, light, and system-preferred themes
 - **Audit Logging** — Every action recorded with user, IP address, and timestamp
 - **Azure AD SSO** — Optional OIDC integration for single sign-on
+- **Responsive Tables** — Resizable columns, sticky headers, custom scrollbars, and mobile card layout
 
 ## Tech Stack
 
@@ -105,8 +108,8 @@ Browser → Vite proxy (/api) → Express → Prisma → SQLite
 
 | Role | Access |
 |------|--------|
-| **Admin** | Full access — manage users, roles, credentials, templates, deployments, settings |
-| **Editor** | Manage cloud connections, deploy templates, dispatch GitHub workflows |
-| **Viewer** | Browse template catalog and view deployment status (read-only) |
+| **Admin** | Full access — manage users, roles, credentials, templates, deployments, services, settings |
+| **Editor** | Manage cloud connections, deploy templates, scaffold services, dispatch GitHub workflows |
+| **Viewer** | Browse template catalog, view deployments and services (read-only) |
 
 Admins can also create custom roles with any subset of the 20 available permissions.

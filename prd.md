@@ -107,6 +107,7 @@ Browser → Vite proxy (/api) → Express → Prisma → SQLite
 | Cloud Connections | `cloud_connections.list`, `cloud_connections.create`, `cloud_connections.update`, `cloud_connections.delete` |
 | Templates | `templates.list`, `templates.sync` |
 | Deployments | `deployments.list`, `deployments.create`, `deployments.destroy` |
+| Services | `services.list`, `services.create`, `services.manage` |
 | GitHub | `github.manage` |
 | Audit | `audit_logs.view` |
 | Settings | `settings.manage` |
@@ -116,8 +117,8 @@ Browser → Vite proxy (/api) → Express → Prisma → SQLite
 | Role | Permissions |
 |------|------------|
 | Admin | All 20 permissions |
-| Editor | Cloud connections (CRUD), templates (list), deployments (full), GitHub |
-| Viewer | Cloud connections (list), templates (list), deployments (list) |
+| Editor | Cloud connections (CRUD), templates (list), deployments (full), services (list/create), GitHub |
+| Viewer | Cloud connections (list), templates (list), deployments (list), services (list) |
 
 **Custom Roles**: Admins can create roles with any subset of permissions. Cannot modify or delete system roles.
 
@@ -134,9 +135,9 @@ Browser → Vite proxy (/api) → Express → Prisma → SQLite
 **Route**: `/`
 
 Displays summary statistics and recent activity:
-- Total templates, deployments, cloud connections
-- Count of active (running) deployments
-- List of the 5 most recent deployments with status badges
+- Total templates, services, cloud connections
+- Count of active services
+- List of the 5 most recent services with status badges
 
 ### 4.2 Template Catalog
 
@@ -235,8 +236,38 @@ succeeded → destroying → destroyed
 - Variables card: shows input values
 - Error message display (on failure)
 - Destroy button (if succeeded and user has `deployments.destroy` permission)
+- **Stale Cleanup**: Admin-only "Clean Up" button to bulk-delete deployments in failed, destroyed, pending, or planned states. Calls `DELETE /api/deployments/stale` with confirmation dialog.
 
-### 4.5 GitHub Integration
+### 4.5 Service Scaffolding
+
+**Routes**: `/services`, `/services/:id`, `/templates/:slug/scaffold`
+
+Scaffold new services by creating GitHub repositories from templates.
+
+**Prerequisites**:
+- GitHub connection configured (PAT on `/github` page)
+- Template with `hasScaffold: true` (e.g., "AWS Microservice")
+- User has `services.create` permission
+
+**Flow**:
+1. Navigate to a scaffold-enabled template detail page
+2. Click "Scaffold Service" button
+3. Enter service name (becomes GitHub repo name)
+4. Fill in template variables
+5. Submit → creates GitHub repo from template via API
+
+**Service Catalog** (`/services`):
+- Table of all scaffolded services with name, template, status, GitHub repo link, creator
+- Search filter
+- Auto-refresh every 5 seconds
+
+**Service Statuses**: `scaffolding` → `active` / `failed` / `archived`
+
+### 4.6 Dark/Light Mode
+
+The UI supports dark mode, light mode, and system-preferred theme detection. A toggle in the top bar allows switching between modes. Theme preference persists in `localStorage`.
+
+### 4.7 GitHub Integration
 
 **Route**: `/github`
 
@@ -252,7 +283,7 @@ Allows users to connect their GitHub account and trigger CI/CD workflows.
 
 **Permissions**: Requires `github.manage` permission.
 
-### 4.6 Admin — User Management
+### 4.8 Admin — User Management
 
 **Route**: `/admin/users`
 
@@ -263,7 +294,7 @@ Allows users to connect their GitHub account and trigger CI/CD workflows.
 - Delete user (with confirmation dialog)
 - Toggle active/disabled status
 
-### 4.7 Admin — Role Management
+### 4.9 Admin — Role Management
 
 **Route**: `/admin/roles`
 
@@ -275,7 +306,7 @@ Allows users to connect their GitHub account and trigger CI/CD workflows.
 - Delete custom roles (blocked if users are assigned)
 - System roles (Admin, Editor, Viewer) are read-only
 
-### 4.8 Admin — Audit Log
+### 4.10 Admin — Audit Log
 
 **Route**: `/admin/audit-log`
 
@@ -292,7 +323,7 @@ Allows users to connect their GitHub account and trigger CI/CD workflows.
 - GitHub connect / disconnect / workflow dispatch
 - Template sync
 
-### 4.9 Admin — System Settings
+### 4.11 Admin — System Settings
 
 **Route**: `/admin/settings`
 
@@ -370,9 +401,18 @@ Rate limit: 20 requests / 15 minutes on auth endpoints.
 | GET | `/deployments/:id` | `deployments.list` | Get deployment |
 | POST | `/deployments` | `deployments.create` | Create & enqueue deployment |
 | POST | `/deployments/:id/destroy` | `deployments.destroy` | Destroy deployment |
+| DELETE | `/deployments/stale` | `deployments.destroy` | Bulk-delete stale deployments |
 | GET | `/deployments/:id/logs` | Token in query | SSE log stream |
 
-### 5.7 GitHub
+### 5.7 Services
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|-----------|-------------|
+| GET | `/services` | `services.list` | List all services |
+| GET | `/services/:id` | `services.list` | Get service |
+| POST | `/services` | `services.create` | Create (scaffold) service |
+
+### 5.8 GitHub
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|-----------|-------------|
@@ -383,13 +423,13 @@ Rate limit: 20 requests / 15 minutes on auth endpoints.
 | GET | `/github/repos/:owner/:repo/workflows` | `github.manage` | List workflows |
 | POST | `/github/dispatch` | `github.manage` | Dispatch workflow |
 
-### 5.8 Audit Logs
+### 5.9 Audit Logs
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|-----------|-------------|
 | GET | `/audit-logs` | `audit_logs.view` | List (paginated, filterable) |
 
-### 5.9 Settings
+### 5.10 Settings
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|-----------|-------------|
@@ -397,7 +437,7 @@ Rate limit: 20 requests / 15 minutes on auth endpoints.
 | PUT | `/settings/:key` | `settings.manage` | Set setting |
 | DELETE | `/settings/:key` | `settings.manage` | Delete setting |
 
-### 5.10 Health
+### 5.11 Health
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -484,6 +524,7 @@ General rate limit: 100 requests / 15 minutes on all `/api/*` endpoints.
 | variables | JSON string | Array of `TemplateVariable` |
 | outputs | JSON string | Array of `TemplateOutput` |
 | tags | JSON string | |
+| hasScaffold | boolean | If true, template supports service scaffolding |
 
 ### Deployment
 | Field | Type | Notes |
@@ -501,6 +542,28 @@ General rate limit: 100 requests / 15 minutes on all `/api/*` endpoints.
 | terraformState | text? | tfstate for destroy |
 | errorMessage | string? | |
 | createdById | UUID | FK → User |
+
+### Service
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| name | string | Also used as GitHub repo name |
+| status | string | `scaffolding`, `active`, `failed`, `archived` |
+| templateId | UUID | FK → Template |
+| parameters | JSON string | User-provided template variables |
+| githubRepoUrl | string? | URL of created GitHub repo |
+| githubRepoSlug | string? | `owner/repo` format |
+| errorMessage | string? | |
+| createdById | UUID | FK → User |
+
+### WorkflowRun
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| githubRunId | string | GitHub Actions run ID |
+| status | string | `queued`, `in_progress`, `completed`, `failure` |
+| serviceId | UUID | FK → Service |
+| workflowName | string | |
 
 ### AuditLog
 | Field | Type | Notes |

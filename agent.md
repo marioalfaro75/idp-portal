@@ -43,7 +43,7 @@ idp-portal/
 │   ├── src/
 │   │   ├── main.tsx          # App entry point (React Query + Router providers)
 │   │   ├── router.tsx        # All route definitions
-│   │   ├── index.css         # Tailwind imports
+│   │   ├── index.css         # Tailwind imports + table scrollbar styles
 │   │   ├── api/              # Axios API client modules
 │   │   │   ├── client.ts     # Axios instance, interceptors
 │   │   │   ├── auth.ts
@@ -54,6 +54,7 @@ idp-portal/
 │   │   │   ├── deployments.ts
 │   │   │   ├── github.ts
 │   │   │   ├── audit.ts
+│   │   │   ├── services.ts
 │   │   │   └── settings.ts
 │   │   ├── components/
 │   │   │   ├── ui/           # Reusable primitives (Button, Input, Select, Card, Badge, Modal, Table)
@@ -65,8 +66,9 @@ idp-portal/
 │   │   └── pages/
 │   │       ├── auth/         # LoginPage, SetupPage, OAuthCallbackPage
 │   │       ├── dashboard/    # DashboardPage
-│   │       ├── templates/    # TemplateCatalogPage, TemplateDetailPage, DeployPage
+│   │       ├── templates/    # TemplateCatalogPage, TemplateDetailPage, DeployPage, ScaffoldPage
 │   │       ├── deployments/  # DeploymentListPage, DeploymentDetailPage
+│   │       ├── services/     # ServiceCatalogPage, ServiceDetailPage, ScaffoldPage
 │   │       ├── cloud-connections/  # CloudConnectionsPage
 │   │       ├── github/       # GitHubPage
 │   │       └── admin/        # UsersPage, RolesPage, AuditLogPage, SettingsPage
@@ -94,6 +96,7 @@ idp-portal/
 │   │   │   ├── deployments/      # Deployment CRUD, terraform-runner, queue, SSE logs
 │   │   │   ├── github/           # GitHub connection, repos, workflows, dispatch
 │   │   │   ├── audit/            # Audit log service + routes
+│   │   │   ├── services/        # Service scaffolding via GitHub
 │   │   │   └── settings/         # System settings CRUD
 │   │   └── utils/
 │   │       ├── errors.ts         # AppError, NotFoundError, UnauthorizedError, etc.
@@ -101,7 +104,7 @@ idp-portal/
 │   │       ├── crypto.ts         # AES-256-GCM encrypt/decrypt
 │   │       └── logger.ts         # Console logger with levels
 │   ├── prisma/
-│   │   ├── schema.prisma     # Database schema (9 models)
+│   │   ├── schema.prisma     # Database schema (12 models)
 │   │   ├── seed.ts           # Seeds system roles (Admin, Editor, Viewer)
 │   │   ├── migrations/       # Prisma migration files
 │   │   └── dev.db            # SQLite database file (gitignored)
@@ -157,15 +160,17 @@ cd server && npx prisma generate  # Regenerate client after schema changes
 
 **Schema file**: `server/prisma/schema.prisma`
 
-**Models** (9 total):
+**Models** (12 total):
 - `User` — portal users; FK to Role
 - `Role` — permission groups; permissions stored as JSON string array
 - `Session` — JWT session tracking (jti-based revocation)
 - `OAuthAccount` — Azure AD OIDC linked accounts
 - `CloudConnection` — encrypted cloud provider credentials
 - `GitHubConnection` — encrypted GitHub PAT per user
-- `Template` — synced from filesystem; variables/outputs as JSON
+- `Template` — synced from filesystem; variables/outputs as JSON; `hasScaffold` flag
 - `Deployment` — terraform deployment records with state
+- `Service` — scaffolded GitHub repos from templates
+- `WorkflowRun` — tracked GitHub Actions workflow runs
 - `AuditLog` — immutable action log
 - `SystemSetting` — key-value config store
 
@@ -186,7 +191,7 @@ cd server && npx prisma generate  # Regenerate client after schema changes
 - Middleware checks session exists on every authenticated request
 - Logout = delete session record → JWT immediately invalid
 
-**RBAC**: 20 permissions across 8 domains. Three system roles (Admin, Editor, Viewer) seeded on setup. Custom roles supported.
+**RBAC**: 20 permissions across 9 domains (users, roles, cloud connections, templates, deployments, services, GitHub, audit, settings). Three system roles (Admin, Editor, Viewer) seeded on setup. Custom roles supported.
 
 **Server enforcement**:
 ```typescript
@@ -333,8 +338,10 @@ All endpoints prefixed with `/api`. Auth endpoints rate-limited to 20 req/15min.
 - `/api/roles` — Create/Update/Delete (`roles.manage`)
 - `/api/cloud-connections` — CRUD + validate (`cloud_connections.*`)
 - `/api/templates` — List/Get (`templates.list`), Sync (`templates.sync`)
-- `/api/deployments` — List/Get (`deployments.list`), Create (`deployments.create`), Destroy (`deployments.destroy`)
+- `/api/deployments` — List/Get (`deployments.list`), Create (`deployments.create`), Destroy (`deployments.destroy`), Cleanup stale (`deployments.destroy`)
 - `/api/deployments/:id/logs` — SSE stream (token in query param)
+- `/api/deployments/stale` — DELETE to bulk-remove failed/destroyed/pending/planned deployments (`deployments.destroy`)
+- `/api/services` — CRUD (`services.list/create/manage`)
 - `/api/github/*` — All (`github.manage`)
 - `/api/audit-logs` — List (`audit_logs.view`)
 - `/api/settings` — CRUD (`settings.manage`)
@@ -371,11 +378,14 @@ Defined in `client/src/router.tsx`:
 | `/login` | LoginPage | No | |
 | `/setup` | SetupPage | No | Only before setup complete |
 | `/auth/callback` | OAuthCallbackPage | No | OIDC redirect target |
-| `/` | DashboardPage | Yes | Stats + recent deployments |
+| `/` | DashboardPage | Yes | Stats + recent services |
 | `/templates` | TemplateCatalogPage | Yes | Search + filter grid |
-| `/templates/:slug` | TemplateDetailPage | Yes | Variables, outputs, deploy button |
+| `/templates/:slug` | TemplateDetailPage | Yes | Variables, outputs, deploy/scaffold button |
 | `/templates/:slug/deploy` | DeployPage | Yes | Deploy form |
-| `/deployments` | DeploymentListPage | Yes | Table of all deployments |
+| `/templates/:slug/scaffold` | ScaffoldPage | Yes | Scaffold service form (requires GitHub) |
+| `/services` | ServiceCatalogPage | Yes | Table of all scaffolded services |
+| `/services/:id` | ServiceDetailPage | Yes | Service details, workflow runs |
+| `/deployments` | DeploymentListPage | Yes | Table of all deployments + cleanup |
 | `/deployments/:id` | DeploymentDetailPage | Yes | Logs, outputs, destroy |
 | `/cloud-connections` | CloudConnectionsPage | Yes | CRUD connections |
 | `/github` | GitHubPage | Yes | PAT connect, repos, workflows |
