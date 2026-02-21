@@ -92,13 +92,25 @@ export async function listWorkflows(userId: string, owner: string, repo: string)
 
 export async function dispatchWorkflow(userId: string, owner: string, repo: string, workflowId: number, ref: string, inputs?: Record<string, string>) {
   const octokit = await getOctokit(userId);
-  await octokit.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: workflowId,
-    ref,
-    inputs,
-  });
+  try {
+    await octokit.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: workflowId,
+      ref,
+      inputs,
+    });
+  } catch (err: any) {
+    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+      throw new AppError(403,
+        'GitHub token lacks permission to dispatch workflows. ' +
+        'For classic PATs, enable the "repo" scope. ' +
+        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+      );
+    }
+    throw err;
+  }
 }
 
 export async function createRepo(
@@ -187,13 +199,25 @@ export async function dispatchWorkflowByName(
   const octokit = await getOctokit(userId);
   const dispatchedAt = new Date();
 
-  await octokit.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: filename,
-    ref,
-    inputs,
-  });
+  try {
+    await octokit.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: filename,
+      ref,
+      inputs,
+    });
+  } catch (err: any) {
+    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+      throw new AppError(403,
+        'GitHub token lacks permission to dispatch workflows. ' +
+        'For classic PATs, enable the "repo" scope. ' +
+        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+      );
+    }
+    throw err;
+  }
 
   // Wait for run to appear
   await new Promise((resolve) => setTimeout(resolve, 5000));

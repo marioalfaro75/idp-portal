@@ -32,20 +32,32 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
 
   const dispatchedAt = new Date();
 
-  await octokit.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: workflowId,
-    ref,
-    inputs: {
-      template_slug: deployment.template.slug,
-      template_provider: deployment.template.provider,
-      variables: JSON.stringify(variables),
-      deployment_id: deployment.id,
-      deployment_name: deployment.name,
-      action: 'apply',
-    },
-  });
+  try {
+    await octokit.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: workflowId,
+      ref,
+      inputs: {
+        template_slug: deployment.template.slug,
+        template_provider: deployment.template.provider,
+        variables: JSON.stringify(variables),
+        deployment_id: deployment.id,
+        deployment_name: deployment.name,
+        action: 'apply',
+      },
+    });
+  } catch (err: any) {
+    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+      throw new Error(
+        'GitHub token lacks permission to dispatch workflows. ' +
+        'For classic PATs, enable the "repo" scope. ' +
+        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+      );
+    }
+    throw err;
+  }
 
   await prisma.deployment.update({
     where: { id: deploymentId },
@@ -80,20 +92,32 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
 
   const dispatchedAt = new Date();
 
-  await octokit.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: workflowId,
-    ref,
-    inputs: {
-      template_slug: deployment.template.slug,
-      template_provider: deployment.template.provider,
-      variables: JSON.stringify(variables),
-      deployment_id: deployment.id,
-      deployment_name: deployment.name,
-      action: 'destroy',
-    },
-  });
+  try {
+    await octokit.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: workflowId,
+      ref,
+      inputs: {
+        template_slug: deployment.template.slug,
+        template_provider: deployment.template.provider,
+        variables: JSON.stringify(variables),
+        deployment_id: deployment.id,
+        deployment_name: deployment.name,
+        action: 'destroy',
+      },
+    });
+  } catch (err: any) {
+    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+      throw new Error(
+        'GitHub token lacks permission to dispatch workflows. ' +
+        'For classic PATs, enable the "repo" scope. ' +
+        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+      );
+    }
+    throw err;
+  }
 
   await prisma.deployment.update({
     where: { id: deploymentId },
