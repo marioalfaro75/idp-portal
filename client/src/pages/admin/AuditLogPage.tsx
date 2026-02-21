@@ -4,6 +4,45 @@ import { auditApi } from '../../api/audit';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Table } from '../../components/ui/Table';
+import type { AuditLogEntry } from '@idp/shared';
+
+const columns = [
+  {
+    key: 'createdAt',
+    header: 'Time',
+    render: (entry: AuditLogEntry) => (
+      <span className="text-gray-500 dark:text-gray-400">{new Date(entry.createdAt).toLocaleString()}</span>
+    ),
+  },
+  {
+    key: 'action',
+    header: 'Action',
+    render: (entry: AuditLogEntry) => <Badge>{entry.action}</Badge>,
+  },
+  {
+    key: 'resource',
+    header: 'Resource',
+    render: (entry: AuditLogEntry) => (
+      <>
+        {entry.resource}
+        {entry.resourceId ? ` (${entry.resourceId.slice(0, 8)}...)` : ''}
+      </>
+    ),
+  },
+  {
+    key: 'user',
+    header: 'User',
+    render: (entry: AuditLogEntry) => entry.user?.displayName || '-',
+  },
+  {
+    key: 'ipAddress',
+    header: 'IP',
+    render: (entry: AuditLogEntry) => (
+      <span className="text-gray-500 dark:text-gray-400">{entry.ipAddress || '-'}</span>
+    ),
+  },
+];
 
 export function AuditLogPage() {
   const [page, setPage] = useState(1);
@@ -23,30 +62,7 @@ export function AuditLogPage() {
           <p className="text-center py-8 text-gray-500 dark:text-gray-400">No audit entries</p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Time</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Resource</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">IP</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {data.data.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{new Date(entry.createdAt).toLocaleString()}</td>
-                      <td className="px-4 py-3"><Badge>{entry.action}</Badge></td>
-                      <td className="px-4 py-3 text-sm dark:text-gray-300">{entry.resource}{entry.resourceId ? ` (${entry.resourceId.slice(0, 8)}...)` : ''}</td>
-                      <td className="px-4 py-3 text-sm dark:text-gray-300">{entry.user?.displayName || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{entry.ipAddress || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table<AuditLogEntry> columns={columns} data={data.data} />
             <div className="flex justify-between items-center pt-4">
               <span className="text-sm text-gray-500 dark:text-gray-400">Total: {data.total}</span>
               <div className="flex gap-2">
