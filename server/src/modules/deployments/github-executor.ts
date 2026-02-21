@@ -3,6 +3,8 @@ import { prisma } from '../../prisma';
 import { decrypt } from '../../utils/crypto';
 import { logger } from '../../utils/logger';
 import { getLogEmitter } from './deployments.service';
+import { listWorkflows, getWorkflowFileContent, updateWorkflowFile } from '../github/github.service';
+import { ensureWorkflowDispatch } from '../github/workflow-validator';
 
 async function getOctokit(userId: string): Promise<Octokit> {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -17,6 +19,54 @@ function parseRepo(repo: string): { owner: string; repo: string } {
   return { owner, repo: name };
 }
 
+async function ensureWorkflowReady(
+  deploymentId: string,
+  userId: string,
+  owner: string,
+  repo: string,
+  workflowId: string,
+  ref: string,
+): Promise<void> {
+  const emitter = getLogEmitter(deploymentId);
+  try {
+    // Resolve workflow file path from workflow ID
+    const workflows = await listWorkflows(userId, owner, repo);
+    const workflow = workflows.find((w) => String(w.id) === workflowId || w.path === workflowId || w.name === workflowId);
+    if (!workflow) {
+      emitter.emit('log', { type: 'warning', message: 'Could not find workflow file to validate — proceeding with dispatch' });
+      return;
+    }
+
+    const filePath = workflow.path; // e.g. ".github/workflows/deploy.yml"
+    emitter.emit('log', { type: 'status', message: `Validating workflow file: ${filePath}` });
+
+    const { content, sha } = await getWorkflowFileContent(userId, owner, repo, filePath, ref);
+    const result = ensureWorkflowDispatch(content);
+
+    if (result.valid) {
+      emitter.emit('log', { type: 'status', message: 'Workflow file validated — all required inputs present' });
+      return;
+    }
+
+    if (!result.fixed) {
+      emitter.emit('log', { type: 'warning', message: `Workflow validation failed: ${result.changes.join('; ')}. Proceeding with dispatch anyway.` });
+      return;
+    }
+
+    // Commit the fix
+    emitter.emit('log', { type: 'status', message: `Auto-fixing workflow: ${result.changes.join('; ')}` });
+    await updateWorkflowFile(userId, owner, repo, filePath, result.fixed, sha, ref);
+    emitter.emit('log', { type: 'status', message: 'Workflow file updated — waiting for GitHub to process changes...' });
+
+    // Wait for GitHub to process the commit before dispatching
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  } catch (err) {
+    logger.warn(`Workflow validation failed for deployment ${deploymentId}`, { error: (err as Error).message });
+    const emitter = getLogEmitter(deploymentId);
+    emitter.emit('log', { type: 'warning', message: `Workflow validation skipped: ${(err as Error).message}` });
+  }
+}
+
 export async function dispatchAndTrack(deploymentId: string, userId: string): Promise<void> {
   const deployment = await prisma.deployment.findUnique({
     where: { id: deploymentId },
@@ -29,6 +79,8 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   const workflowId = deployment.githubWorkflowId!;
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
+
+  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref);
 
   const dispatchedAt = new Date();
 
@@ -89,6 +141,8 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   const workflowId = deployment.githubWorkflowId!;
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
+
+  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref);
 
   const dispatchedAt = new Date();
 

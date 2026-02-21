@@ -188,6 +188,43 @@ export async function pushScaffoldFiles(
   });
 }
 
+export async function getWorkflowFileContent(
+  userId: string,
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+): Promise<{ content: string; sha: string }> {
+  const octokit = await getOctokit(userId);
+  const params: any = { owner, repo, path };
+  if (ref) params.ref = ref;
+  const { data } = await octokit.repos.getContent(params) as any;
+  if (data.type !== 'file') throw new AppError(400, `${path} is not a file`);
+  const content = Buffer.from(data.content, 'base64').toString('utf-8');
+  return { content, sha: data.sha };
+}
+
+export async function updateWorkflowFile(
+  userId: string,
+  owner: string,
+  repo: string,
+  path: string,
+  content: string,
+  sha: string,
+  branch: string,
+): Promise<void> {
+  const octokit = await getOctokit(userId);
+  await octokit.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path,
+    message: 'Auto-fix workflow: add workflow_dispatch inputs for IDP deployments',
+    content: Buffer.from(content).toString('base64'),
+    sha,
+    branch,
+  });
+}
+
 export async function dispatchWorkflowByName(
   userId: string,
   owner: string,
