@@ -30,13 +30,13 @@ export function SetupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">IDP Portal Setup</h1>
-          <p className="text-gray-500 mt-2">Create your admin account to get started</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">IDP Portal Setup</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">Create your admin account to get started</p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 space-y-4">
           <Input label="Display Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required minLength={2} />
           <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />

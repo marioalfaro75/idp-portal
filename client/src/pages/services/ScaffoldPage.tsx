@@ -56,14 +56,14 @@ export function ScaffoldPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
-        <Link to={`/templates/${slug}`} className="p-2 hover:bg-gray-100 rounded-lg">
+        <Link to={`/templates/${slug}`} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <h1 className="text-2xl font-bold">Scaffold: {template.name}</h1>
       </div>
 
       {!githubConnection && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-300">
           You need to connect your GitHub account to scaffold services.{' '}
           <Link to="/github" className="text-primary-600 hover:underline font-medium">Connect GitHub</Link>
         </div>
@@ -79,7 +79,7 @@ export function ScaffoldPage() {
               required
               placeholder="my-service"
             />
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               A GitHub repository will be created with this name. Use lowercase letters, numbers, and hyphens.
             </p>
           </div>

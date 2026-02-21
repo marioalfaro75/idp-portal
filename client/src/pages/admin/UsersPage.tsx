@@ -96,10 +96,10 @@ export function UsersPage() {
     {
       key: 'actions', header: '', render: (u: User) => (
         <div className="flex gap-2">
-          <button onClick={() => handleEdit(u)} className="p-1 hover:bg-gray-100 rounded text-gray-500" title="Edit user">
+          <button onClick={() => handleEdit(u)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500" title="Edit user">
             <Edit className="w-4 h-4" />
           </button>
-          <button onClick={() => handleDelete(u.id)} className="p-1 hover:bg-gray-100 rounded text-red-500" title="Delete">
+          <button onClick={() => handleDelete(u.id)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-red-500" title="Delete">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>

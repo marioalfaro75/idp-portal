@@ -119,7 +119,7 @@ export function ServiceDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/services" className="p-2 hover:bg-gray-100 rounded-lg">
+        <Link to="/services" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
@@ -138,10 +138,10 @@ export function ServiceDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Details">
           <dl className="space-y-3">
-            <div><dt className="text-sm text-gray-500">Template</dt><dd className="font-medium">{service.template?.name}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Template</dt><dd className="font-medium">{service.template?.name}</dd></div>
             {service.githubRepoUrl && (
               <div>
-                <dt className="text-sm text-gray-500">GitHub Repository</dt>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">GitHub Repository</dt>
                 <dd>
                   <a href={service.githubRepoUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline font-medium inline-flex items-center gap-1">
                     {service.githubRepoSlug} <ExternalLink className="w-3 h-3" />
@@ -149,8 +149,8 @@ export function ServiceDetailPage() {
                 </dd>
               </div>
             )}
-            <div><dt className="text-sm text-gray-500">Created By</dt><dd className="font-medium">{service.createdBy?.displayName}</dd></div>
-            <div><dt className="text-sm text-gray-500">Created At</dt><dd className="font-medium">{new Date(service.createdAt).toLocaleString()}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Created By</dt><dd className="font-medium">{service.createdBy?.displayName}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Created At</dt><dd className="font-medium">{new Date(service.createdAt).toLocaleString()}</dd></div>
           </dl>
         </Card>
 
@@ -159,7 +159,7 @@ export function ServiceDetailPage() {
             <dl className="space-y-2">
               {Object.entries(service.parameters).map(([key, value]) => (
                 <div key={key} className="flex gap-4">
-                  <dt className="text-sm font-medium text-gray-500 w-48">{key}</dt>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">{key}</dt>
                   <dd className="text-sm">{value}</dd>
                 </div>
               ))}
@@ -170,7 +170,7 @@ export function ServiceDetailPage() {
 
       {service.errorMessage && (
         <Card title="Error">
-          <pre className="text-red-600 text-sm whitespace-pre-wrap">{service.errorMessage}</pre>
+          <pre className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">{service.errorMessage}</pre>
         </Card>
       )}
 

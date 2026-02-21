@@ -97,7 +97,7 @@ export function SettingsPage() {
         <dl className="space-y-2">
           {Object.entries(settings).filter(([k]) => !k.startsWith('oidc.') && !k.startsWith('github.')).map(([key, value]) => (
             <div key={key} className="flex gap-4">
-              <dt className="text-sm font-medium text-gray-500 w-48">{key}</dt>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">{key}</dt>
               <dd className="text-sm">{value}</dd>
             </div>
           ))}

@@ -75,9 +75,9 @@ export function CloudConnectionsPage() {
     {
       key: 'actions', header: '', render: (c: CloudConnection) => (
         <div className="flex gap-2">
-          <button onClick={() => handleValidate(c.id)} className="p-1 hover:bg-gray-100 rounded text-gray-500" title="Validate"><CheckCircle className="w-4 h-4" /></button>
+          <button onClick={() => handleValidate(c.id)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500" title="Validate"><CheckCircle className="w-4 h-4" /></button>
           {hasPermission(PERMISSIONS.CLOUD_CONNECTIONS_DELETE) && (
-            <button onClick={() => handleDelete(c.id)} className="p-1 hover:bg-gray-100 rounded text-red-500" title="Delete"><Trash2 className="w-4 h-4" /></button>
+            <button onClick={() => handleDelete(c.id)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-red-500" title="Delete"><Trash2 className="w-4 h-4" /></button>
           )}
         </div>
       ),
@@ -109,8 +109,8 @@ export function CloudConnectionsPage() {
           {form.provider === 'gcp' && (<>
             <Input label="Project ID" value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} required />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Service Account Key (JSON)</label>
-              <textarea className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" rows={4} value={form.serviceAccountKey} onChange={(e) => setForm({ ...form, serviceAccountKey: e.target.value })} required />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Service Account Key (JSON)</label>
+              <textarea className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm dark:bg-gray-800 dark:text-gray-100" rows={4} value={form.serviceAccountKey} onChange={(e) => setForm({ ...form, serviceAccountKey: e.target.value })} required />
             </div>
           </>)}
           {form.provider === 'azure' && (<>

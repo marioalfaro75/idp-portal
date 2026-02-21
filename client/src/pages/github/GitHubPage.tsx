@@ -89,7 +89,7 @@ export function GitHubPage() {
         <h1 className="text-2xl font-bold">GitHub Integration</h1>
         <Card title="Connect GitHub">
           <form onSubmit={handleConnect} className="space-y-4 max-w-md">
-            <p className="text-sm text-gray-500">Enter a GitHub Personal Access Token to connect your account.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Enter a GitHub Personal Access Token to connect your account.</p>
             <Input label="Personal Access Token" type="password" value={token} onChange={(e) => setToken(e.target.value)} required placeholder="ghp_..." />
             <Button type="submit" loading={connecting}><Link2 className="w-4 h-4 mr-2" /> Connect</Button>
           </form>
@@ -112,7 +112,7 @@ export function GitHubPage() {
       </Card>
 
       <Card title="Repositories">
-        <div className="divide-y max-h-96 overflow-y-auto">
+        <div className="divide-y dark:divide-gray-700 max-h-96 overflow-y-auto">
           {repos.map((repo) => (
             <div key={repo.id} className="flex items-center justify-between py-3">
               <div>
@@ -123,24 +123,24 @@ export function GitHubPage() {
                   </a>
                   {repo.private && <Badge variant="warning">private</Badge>}
                 </div>
-                {repo.description && <p className="text-sm text-gray-500 ml-6">{repo.description}</p>}
+                {repo.description && <p className="text-sm text-gray-500 dark:text-gray-400 ml-6">{repo.description}</p>}
               </div>
               <Button size="sm" variant="secondary" onClick={() => { setSelectedRepo(repo); setShowDispatch(true); }}>
                 <Play className="w-3 h-3 mr-1" /> Actions
               </Button>
             </div>
           ))}
-          {repos.length === 0 && <p className="text-gray-500 py-4 text-center">No repositories found</p>}
+          {repos.length === 0 && <p className="text-gray-500 dark:text-gray-400 py-4 text-center">No repositories found</p>}
         </div>
       </Card>
 
       <Modal open={showDispatch} onClose={() => { setShowDispatch(false); setSelectedRepo(null); }} title={`Workflows - ${selectedRepo?.fullName}`}>
         <div className="space-y-4">
-          {workflows.length === 0 ? <p className="text-gray-500">No workflows found</p> : workflows.map((wf) => (
-            <div key={wf.id} className="flex items-center justify-between p-3 border rounded-lg">
+          {workflows.length === 0 ? <p className="text-gray-500 dark:text-gray-400">No workflows found</p> : workflows.map((wf) => (
+            <div key={wf.id} className="flex items-center justify-between p-3 border dark:border-gray-700 rounded-lg">
               <div>
                 <p className="font-medium">{wf.name}</p>
-                <p className="text-sm text-gray-500">{wf.path}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{wf.path}</p>
               </div>
               <Button size="sm" onClick={() => { setSelectedWorkflow(wf); }}>
                 <Play className="w-3 h-3 mr-1" /> Run
@@ -148,7 +148,7 @@ export function GitHubPage() {
             </div>
           ))}
           {selectedWorkflow && (
-            <div className="border-t pt-4 space-y-3">
+            <div className="border-t dark:border-gray-700 pt-4 space-y-3">
               <p className="font-medium">Dispatch: {selectedWorkflow.name}</p>
               <Input label="Branch/Ref" value={ref} onChange={(e) => setRef(e.target.value)} />
               <Button onClick={handleDispatch}>Dispatch Workflow</Button>

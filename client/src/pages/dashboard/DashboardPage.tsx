@@ -56,7 +56,7 @@ export function DashboardPage() {
                   <stat.icon className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
                   <p className="text-2xl font-bold">{stat.value}</p>
                 </div>
               </div>
@@ -67,14 +67,14 @@ export function DashboardPage() {
 
       <Card title="Recent Services">
         {recentServices.length === 0 ? (
-          <p className="text-gray-500 text-center py-4">No services yet</p>
+          <p className="text-gray-500 dark:text-gray-400 text-center py-4">No services yet</p>
         ) : (
           <div className="divide-y">
             {recentServices.map((s) => (
-              <Link key={s.id} to={`/services/${s.id}`} className="flex items-center justify-between py-3 hover:bg-gray-50 px-2 rounded">
+              <Link key={s.id} to={`/services/${s.id}`} className="flex items-center justify-between py-3 hover:bg-gray-50 dark:hover:bg-gray-700 px-2 rounded">
                 <div>
                   <p className="font-medium">{s.name}</p>
-                  <p className="text-sm text-gray-500">{s.template?.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{s.template?.name}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant={serviceStatusVariant(s.status)}>{s.status}</Badge>

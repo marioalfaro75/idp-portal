@@ -57,7 +57,7 @@ export function TemplateCatalogPage() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100"
             placeholder="Search templates..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -82,7 +82,7 @@ export function TemplateCatalogPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
         </div>
       ) : templates.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">No templates found. Try syncing templates first.</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">No templates found. Try syncing templates first.</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {templates.map((t) => (
@@ -94,10 +94,10 @@ export function TemplateCatalogPage() {
                     <Badge>{t.category}</Badge>
                   </div>
                   <h3 className="font-semibold text-lg">{t.name}</h3>
-                  <p className="text-sm text-gray-500 line-clamp-2">{t.description}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">{t.description}</p>
                   <div className="flex flex-wrap gap-1">
                     {t.tags?.slice(0, 3).map((tag) => (
-                      <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{tag}</span>
+                      <span key={tag} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">{tag}</span>
                     ))}
                   </div>
                 </div>

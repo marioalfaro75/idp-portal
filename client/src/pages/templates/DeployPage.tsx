@@ -125,7 +125,7 @@ export function DeployPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
-        <Link to={`/templates/${slug}`} className="p-2 hover:bg-gray-100 rounded-lg">
+        <Link to={`/templates/${slug}`} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <h1 className="text-2xl font-bold">Deploy: {template.name}</h1>
@@ -156,7 +156,7 @@ export function DeployPage() {
                   onChange={() => setExecutionMethod('local')}
                   className="text-primary-600 focus:ring-primary-500"
                 />
-                <span className="text-sm font-medium">Local (Server)</span>
+                <span className="text-sm font-medium dark:text-gray-200">Local (Server)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -167,12 +167,12 @@ export function DeployPage() {
                   onChange={() => setExecutionMethod('github')}
                   className="text-primary-600 focus:ring-primary-500"
                 />
-                <span className="text-sm font-medium">GitHub Actions</span>
+                <span className="text-sm font-medium dark:text-gray-200">GitHub Actions</span>
               </label>
             </div>
 
             {executionMethod === 'github' && !githubConnection && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-300">
                 You need to connect your GitHub account first.{' '}
                 <Link to="/github" className="text-primary-600 hover:underline font-medium">Connect GitHub</Link>
               </div>

@@ -7,7 +7,7 @@ export function AppLayout() {
   const { sidebarCollapsed } = useUiStore();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
         <TopBar />

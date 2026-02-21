@@ -82,7 +82,7 @@ export function DeploymentDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/deployments" className="p-2 hover:bg-gray-100 rounded-lg">
+        <Link to="/deployments" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
@@ -101,18 +101,18 @@ export function DeploymentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Details">
           <dl className="space-y-3">
-            <div><dt className="text-sm text-gray-500">Template</dt><dd className="font-medium">{deployment.template?.name}</dd></div>
-            <div><dt className="text-sm text-gray-500">Cloud Connection</dt><dd className="font-medium">{deployment.cloudConnection?.name}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Template</dt><dd className="font-medium">{deployment.template?.name}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Cloud Connection</dt><dd className="font-medium">{deployment.cloudConnection?.name}</dd></div>
             <div>
-              <dt className="text-sm text-gray-500">Execution Method</dt>
+              <dt className="text-sm text-gray-500 dark:text-gray-400">Execution Method</dt>
               <dd className="font-medium">{deployment.executionMethod === 'github' ? 'GitHub Actions' : 'Local'}</dd>
             </div>
             {deployment.executionMethod === 'github' && deployment.githubRepo && (
-              <div><dt className="text-sm text-gray-500">GitHub Repo</dt><dd className="font-medium">{deployment.githubRepo}</dd></div>
+              <div><dt className="text-sm text-gray-500 dark:text-gray-400">GitHub Repo</dt><dd className="font-medium">{deployment.githubRepo}</dd></div>
             )}
             {deployment.executionMethod === 'github' && deployment.githubRunUrl && (
               <div>
-                <dt className="text-sm text-gray-500">GitHub Run</dt>
+                <dt className="text-sm text-gray-500 dark:text-gray-400">GitHub Run</dt>
                 <dd>
                   <a href={deployment.githubRunUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline font-medium inline-flex items-center gap-1">
                     View on GitHub <ExternalLink className="w-3 h-3" />
@@ -120,8 +120,8 @@ export function DeploymentDetailPage() {
                 </dd>
               </div>
             )}
-            <div><dt className="text-sm text-gray-500">Created By</dt><dd className="font-medium">{deployment.createdBy?.displayName}</dd></div>
-            <div><dt className="text-sm text-gray-500">Created At</dt><dd className="font-medium">{new Date(deployment.createdAt).toLocaleString()}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Created By</dt><dd className="font-medium">{deployment.createdBy?.displayName}</dd></div>
+            <div><dt className="text-sm text-gray-500 dark:text-gray-400">Created At</dt><dd className="font-medium">{new Date(deployment.createdAt).toLocaleString()}</dd></div>
           </dl>
         </Card>
 
@@ -130,8 +130,8 @@ export function DeploymentDetailPage() {
             <dl className="space-y-3">
               {Object.entries(deployment.outputs).map(([key, value]) => (
                 <div key={key}>
-                  <dt className="text-sm text-gray-500">{key}</dt>
-                  <dd className="font-mono text-sm bg-gray-50 p-2 rounded mt-1 break-all">{value}</dd>
+                  <dt className="text-sm text-gray-500 dark:text-gray-400">{key}</dt>
+                  <dd className="font-mono text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded mt-1 break-all">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -141,7 +141,7 @@ export function DeploymentDetailPage() {
 
       {deployment.errorMessage && (
         <Card title="Error">
-          <pre className="text-red-600 text-sm whitespace-pre-wrap">{deployment.errorMessage}</pre>
+          <pre className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">{deployment.errorMessage}</pre>
         </Card>
       )}
 
@@ -161,7 +161,7 @@ export function DeploymentDetailPage() {
           <dl className="space-y-2">
             {Object.entries(deployment.variables).map(([key, value]) => (
               <div key={key} className="flex gap-4">
-                <dt className="text-sm font-medium text-gray-500 w-48">{key}</dt>
+                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">{key}</dt>
                 <dd className="text-sm">{value}</dd>
               </div>
             ))}
