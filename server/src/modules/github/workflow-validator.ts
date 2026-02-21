@@ -137,50 +137,61 @@ export function fixSetupTerraformWrapper(content: string): { fixed: string; chan
 
   while (i < lines.length) {
     const line = lines[i];
-    // Match a step using hashicorp/setup-terraform
-    const setupMatch = line.match(/^(\s*)-\s*uses:\s*hashicorp\/setup-terraform/);
-    if (!setupMatch) {
+
+    // Match `uses: hashicorp/setup-terraform` — either inline with `-` or as a property
+    const inlineMatch = line.match(/^(\s*)-\s*uses:\s*hashicorp\/setup-terraform/);
+    const propMatch = !inlineMatch && line.match(/^(\s*)uses:\s*hashicorp\/setup-terraform/);
+
+    if (!inlineMatch && !propMatch) {
       result.push(line);
       i++;
       continue;
     }
 
-    const stepIndent = setupMatch[1];
-    const propIndent = stepIndent + '  '; // indent for step properties (with:, name:, etc.)
+    // Determine the indent for step properties (with:, name:, etc.)
+    let propIndent: string;
+    let stepItemIndent: string;
+    if (inlineMatch) {
+      // `    - uses: ...` → stepItemIndent="    ", propIndent="      "
+      stepItemIndent = inlineMatch[1];
+      propIndent = stepItemIndent + '  ';
+    } else {
+      // `      uses: ...` → propIndent is the uses line's indent, stepItemIndent is 2 less
+      propIndent = propMatch![1];
+      stepItemIndent = propIndent.length >= 2 ? propIndent.slice(0, -2) : '';
+    }
+
     result.push(line);
     i++;
 
-    // Scan forward through the step's properties to find `with:` or end of step
+    // Scan forward through the step's remaining properties to find `with:` or end of step
     let withLineIdx = -1;
     let withIndent = '';
     let stepEnd = i;
 
     for (let j = i; j < lines.length; j++) {
       const l = lines[j];
-      // Empty line or a line at the same/lesser indent as the step's `- uses:` → end of step
       if (l.trim() === '') {
         stepEnd = j;
         break;
       }
-      // Check if we've left this step (next step starts with `- ` at same indent, or less indented line)
-      if (l.match(new RegExp(`^${stepIndent}- `)) || (l.trim() !== '' && !l.startsWith(propIndent))) {
+      // Next step starts with `- ` at the step item indent level, or line is less indented
+      if (l.match(new RegExp(`^${stepItemIndent}- `)) || (l.trim() !== '' && !l.startsWith(propIndent))) {
         stepEnd = j;
         break;
       }
-      if (l.match(new RegExp(`^${propIndent}with:\\s*$`))) {
+      if (l.match(new RegExp(`^${propIndent}with:\\s*$`)) || l.match(new RegExp(`^${propIndent}with:\\s*#`))) {
         withLineIdx = j;
         withIndent = propIndent + '  ';
       }
-      // Check if terraform_wrapper is already set somewhere in with block
+      // Check if terraform_wrapper is already set
       if (withLineIdx !== -1 && l.includes('terraform_wrapper')) {
-        // Already present, skip this step entirely
-        withLineIdx = -2; // sentinel: don't fix
+        withLineIdx = -2; // sentinel: already present
       }
       stepEnd = j + 1;
     }
 
     if (withLineIdx === -2) {
-      // Already has terraform_wrapper — copy remaining step lines as-is
       while (i < stepEnd) {
         result.push(lines[i]);
         i++;
