@@ -125,6 +125,96 @@ export function ensureWorkflowDispatch(content: string): ValidationResult {
   return { valid: false, fixed, changes };
 }
 
+/**
+ * Finds `hashicorp/setup-terraform` steps and adds `terraform_wrapper: false`
+ * to the `with:` block if not already present.
+ */
+export function fixSetupTerraformWrapper(content: string): { fixed: string; changed: boolean } {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let changed = false;
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    // Match a step using hashicorp/setup-terraform
+    const setupMatch = line.match(/^(\s*)-\s*uses:\s*hashicorp\/setup-terraform/);
+    if (!setupMatch) {
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    const stepIndent = setupMatch[1];
+    const propIndent = stepIndent + '  '; // indent for step properties (with:, name:, etc.)
+    result.push(line);
+    i++;
+
+    // Scan forward through the step's properties to find `with:` or end of step
+    let withLineIdx = -1;
+    let withIndent = '';
+    let stepEnd = i;
+
+    for (let j = i; j < lines.length; j++) {
+      const l = lines[j];
+      // Empty line or a line at the same/lesser indent as the step's `- uses:` → end of step
+      if (l.trim() === '') {
+        stepEnd = j;
+        break;
+      }
+      // Check if we've left this step (next step starts with `- ` at same indent, or less indented line)
+      if (l.match(new RegExp(`^${stepIndent}- `)) || (l.trim() !== '' && !l.startsWith(propIndent))) {
+        stepEnd = j;
+        break;
+      }
+      if (l.match(new RegExp(`^${propIndent}with:\\s*$`))) {
+        withLineIdx = j;
+        withIndent = propIndent + '  ';
+      }
+      // Check if terraform_wrapper is already set somewhere in with block
+      if (withLineIdx !== -1 && l.includes('terraform_wrapper')) {
+        // Already present, skip this step entirely
+        withLineIdx = -2; // sentinel: don't fix
+      }
+      stepEnd = j + 1;
+    }
+
+    if (withLineIdx === -2) {
+      // Already has terraform_wrapper — copy remaining step lines as-is
+      while (i < stepEnd) {
+        result.push(lines[i]);
+        i++;
+      }
+      continue;
+    }
+
+    if (withLineIdx >= 0) {
+      // Has `with:` block but no terraform_wrapper — insert after `with:` line
+      while (i <= withLineIdx) {
+        result.push(lines[i]);
+        i++;
+      }
+      result.push(`${withIndent}terraform_wrapper: false`);
+      changed = true;
+      while (i < stepEnd) {
+        result.push(lines[i]);
+        i++;
+      }
+    } else {
+      // No `with:` block — add one after the uses line
+      result.push(`${propIndent}with:`);
+      result.push(`${propIndent}  terraform_wrapper: false`);
+      changed = true;
+      while (i < stepEnd) {
+        result.push(lines[i]);
+        i++;
+      }
+    }
+  }
+
+  return { fixed: result.join('\n'), changed };
+}
+
 function buildInputsBlock(inputs: string[]): string {
   return inputs
     .map(

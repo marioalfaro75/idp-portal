@@ -1,10 +1,12 @@
+import fs from 'fs';
+import path from 'path';
 import { Octokit } from '@octokit/rest';
 import { prisma } from '../../prisma';
 import { decrypt } from '../../utils/crypto';
 import { logger } from '../../utils/logger';
 import { getLogEmitter } from './deployments.service';
-import { listWorkflows, getWorkflowFileContent, updateWorkflowFile } from '../github/github.service';
-import { ensureWorkflowDispatch } from '../github/workflow-validator';
+import { listWorkflows, getWorkflowFileContent, updateWorkflowFile, pushScaffoldFiles } from '../github/github.service';
+import { ensureWorkflowDispatch, fixSetupTerraformWrapper } from '../github/workflow-validator';
 
 async function getOctokit(userId: string): Promise<Octokit> {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -17,6 +19,50 @@ function parseRepo(repo: string): { owner: string; repo: string } {
   const [owner, name] = repo.split('/');
   if (!owner || !name) throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
   return { owner, repo: name };
+}
+
+async function pushTemplateFiles(
+  deploymentId: string,
+  userId: string,
+  owner: string,
+  repo: string,
+  templatePath: string,
+  variables: Record<string, string>,
+): Promise<void> {
+  const emitter = getLogEmitter(deploymentId);
+
+  try {
+    const absTemplatePath = path.resolve(templatePath);
+    const entries = fs.readdirSync(absTemplatePath);
+    const tfFiles = entries.filter((f) => f.endsWith('.tf'));
+
+    if (tfFiles.length === 0) {
+      emitter.emit('log', { type: 'warning', message: `No .tf files found in ${templatePath}` });
+      return;
+    }
+
+    // Read template files
+    const files: Array<{ path: string; content: string }> = tfFiles.map((f) => ({
+      path: `terraform/${f}`,
+      content: fs.readFileSync(path.join(absTemplatePath, f), 'utf-8'),
+    }));
+
+    // Generate terraform.tfvars
+    const tfvars = Object.entries(variables)
+      .map(([k, v]) => `${k} = "${v.replace(/"/g, '\\"')}"`)
+      .join('\n');
+    files.push({ path: 'terraform/terraform.tfvars', content: tfvars });
+
+    emitter.emit('log', { type: 'status', message: `Pushing ${files.length} template files to ${owner}/${repo}/terraform/` });
+    await pushScaffoldFiles(userId, owner, repo, files);
+    emitter.emit('log', { type: 'status', message: 'Template files pushed successfully' });
+
+    // Wait for GitHub to process the commit
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  } catch (err) {
+    logger.error(`Failed to push template files for deployment ${deploymentId}`, { error: (err as Error).message });
+    emitter.emit('log', { type: 'warning', message: `Failed to push template files: ${(err as Error).message}` });
+  }
 }
 
 async function ensureWorkflowReady(
@@ -41,21 +87,33 @@ async function ensureWorkflowReady(
     emitter.emit('log', { type: 'status', message: `Validating workflow file: ${filePath}` });
 
     const { content, sha } = await getWorkflowFileContent(userId, owner, repo, filePath, ref);
-    const result = ensureWorkflowDispatch(content);
 
-    if (result.valid) {
+    // Check workflow_dispatch inputs
+    const result = ensureWorkflowDispatch(content);
+    // Check setup-terraform wrapper
+    const wrapperFix = fixSetupTerraformWrapper(result.fixed || content);
+
+    const allChanges = [...result.changes];
+    if (wrapperFix.changed) {
+      allChanges.push('Set terraform_wrapper: false on setup-terraform');
+    }
+
+    const finalContent = wrapperFix.fixed;
+    const needsUpdate = !result.valid || wrapperFix.changed;
+
+    if (!needsUpdate) {
       emitter.emit('log', { type: 'status', message: 'Workflow file validated — all required inputs present' });
       return;
     }
 
-    if (!result.fixed) {
+    if (!result.valid && !result.fixed && !wrapperFix.changed) {
       emitter.emit('log', { type: 'warning', message: `Workflow validation failed: ${result.changes.join('; ')}. Proceeding with dispatch anyway.` });
       return;
     }
 
     // Commit the fix
-    emitter.emit('log', { type: 'status', message: `Auto-fixing workflow: ${result.changes.join('; ')}` });
-    await updateWorkflowFile(userId, owner, repo, filePath, result.fixed, sha, ref);
+    emitter.emit('log', { type: 'status', message: `Auto-fixing workflow: ${allChanges.join('; ')}` });
+    await updateWorkflowFile(userId, owner, repo, filePath, finalContent, sha, ref);
     emitter.emit('log', { type: 'status', message: 'Workflow file updated — waiting for GitHub to process changes...' });
 
     // Wait for GitHub to process the commit before dispatching
@@ -80,6 +138,7 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
 
+  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
   await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref);
 
   const dispatchedAt = new Date();
@@ -142,6 +201,7 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
 
+  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
   await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref);
 
   const dispatchedAt = new Date();
