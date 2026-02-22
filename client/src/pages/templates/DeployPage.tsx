@@ -13,6 +13,7 @@ import { Select } from '../../components/ui/Select';
 import { DynamicForm } from '../../components/forms/DynamicForm';
 import { ArrowLeft, Rocket } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { validateVariables } from '@idp/shared';
 
 export function DeployPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -21,6 +22,7 @@ export function DeployPage() {
   const [connectionId, setConnectionId] = useState('');
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [varErrors, setVarErrors] = useState<Record<string, string>>({});
   const [executionMethod, setExecutionMethod] = useState<'local' | 'github'>('local');
   const [githubRepo, setGithubRepo] = useState('');
   const [githubWorkflowId, setGithubWorkflowId] = useState('');
@@ -93,6 +95,16 @@ export function DeployPage() {
   const handleDeploy = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!template) return;
+
+    // Client-side variable validation
+    const errors = validateVariables(variables, template.variables);
+    if (Object.keys(errors).length > 0) {
+      setVarErrors(errors);
+      toast.error('Please fix variable errors before deploying');
+      return;
+    }
+    setVarErrors({});
+
     setLoading(true);
     try {
       const deployment = await deploymentsApi.create({
@@ -110,7 +122,13 @@ export function DeployPage() {
       toast.success('Deployment started!');
       navigate(`/deployments/${deployment.id}`);
     } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Deployment failed');
+      const errorData = err.response?.data?.error;
+      if (errorData?.details && typeof errorData.details === 'object') {
+        setVarErrors(errorData.details);
+        toast.error(errorData.message || 'Variable validation failed');
+      } else {
+        toast.error(errorData?.message || 'Deployment failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -214,6 +232,7 @@ export function DeployPage() {
               variables={template.variables}
               values={variables}
               onChange={(n, v) => setVariables((prev) => ({ ...prev, [n]: v }))}
+              errors={varErrors}
             />
           </Card>
         )}

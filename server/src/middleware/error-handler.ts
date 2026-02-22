@@ -5,9 +5,11 @@ import { ZodError } from 'zod';
 
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({
-      error: { message: err.message, code: err.code },
-    });
+    const body: Record<string, unknown> = { error: { message: err.message, code: err.code } };
+    if ('details' in err && (err as any).details) {
+      (body.error as Record<string, unknown>).details = (err as any).details;
+    }
+    res.status(err.statusCode).json(body);
     return;
   }
 

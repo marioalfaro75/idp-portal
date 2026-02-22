@@ -4,3 +4,4 @@ export * from './cloud-connection';
 export * from './deployment';
 export * from './github';
 export * from './service';
+export * from './variable-validator';

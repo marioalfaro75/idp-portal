@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { logger } from '../../utils/logger';
+import type { TemplateVariable } from '@idp/shared';
+import { generateTfvarsJson } from '../../utils/tfvars';
 
 const TERRAFORM_BIN = process.env.TERRAFORM_BIN || 'terraform';
 
@@ -88,6 +90,7 @@ export async function plan(
   variables: Record<string, string>,
   provider: string,
   credentials: Record<string, unknown>,
+  templateVarDefs: TemplateVariable[],
   onLog?: LogCallback,
 ): Promise<TerraformResult> {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'idp-tf-'));
@@ -99,11 +102,9 @@ export async function plan(
     fs.copyFileSync(path.join(absTemplatePath, file), path.join(workDir, file));
   }
 
-  // Write tfvars
-  const tfvars = Object.entries(variables)
-    .map(([k, v]) => `${k} = "${v.replace(/"/g, '\\"')}"`)
-    .join('\n');
-  fs.writeFileSync(path.join(workDir, 'terraform.tfvars'), tfvars);
+  // Write typed tfvars as JSON
+  const tfvarsJson = generateTfvarsJson(variables, templateVarDefs);
+  fs.writeFileSync(path.join(workDir, 'terraform.tfvars.json'), tfvarsJson);
 
   const env = buildEnvVars(provider, credentials);
 
@@ -131,6 +132,7 @@ export async function apply(
   variables: Record<string, string>,
   provider: string,
   credentials: Record<string, unknown>,
+  templateVarDefs: TemplateVariable[],
   existingState?: string | null,
   onLog?: LogCallback,
 ): Promise<TerraformResult> {
@@ -142,10 +144,9 @@ export async function apply(
     fs.copyFileSync(path.join(absTemplatePath, file), path.join(workDir, file));
   }
 
-  const tfvars = Object.entries(variables)
-    .map(([k, v]) => `${k} = "${v.replace(/"/g, '\\"')}"`)
-    .join('\n');
-  fs.writeFileSync(path.join(workDir, 'terraform.tfvars'), tfvars);
+  // Write typed tfvars as JSON
+  const tfvarsJson = generateTfvarsJson(variables, templateVarDefs);
+  fs.writeFileSync(path.join(workDir, 'terraform.tfvars.json'), tfvarsJson);
 
   if (existingState) {
     fs.writeFileSync(path.join(workDir, 'terraform.tfstate'), existingState);
@@ -197,6 +198,7 @@ export async function destroy(
   variables: Record<string, string>,
   provider: string,
   credentials: Record<string, unknown>,
+  templateVarDefs: TemplateVariable[],
   terraformState: string,
   onLog?: LogCallback,
 ): Promise<TerraformResult> {
@@ -208,10 +210,9 @@ export async function destroy(
     fs.copyFileSync(path.join(absTemplatePath, file), path.join(workDir, file));
   }
 
-  const tfvars = Object.entries(variables)
-    .map(([k, v]) => `${k} = "${v.replace(/"/g, '\\"')}"`)
-    .join('\n');
-  fs.writeFileSync(path.join(workDir, 'terraform.tfvars'), tfvars);
+  // Write typed tfvars as JSON
+  const tfvarsJson = generateTfvarsJson(variables, templateVarDefs);
+  fs.writeFileSync(path.join(workDir, 'terraform.tfvars.json'), tfvarsJson);
   fs.writeFileSync(path.join(workDir, 'terraform.tfstate'), terraformState);
 
   const env = buildEnvVars(provider, credentials);

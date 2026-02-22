@@ -34,7 +34,9 @@ export class ConflictError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string) {
+  public details?: Record<string, string>;
+  constructor(message: string, details?: Record<string, string>) {
     super(400, message, 'VALIDATION_ERROR');
+    this.details = details;
   }
 }

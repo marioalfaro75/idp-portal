@@ -9,6 +9,8 @@ import { getLogEmitter } from './deployments.service';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { listWorkflows, getWorkflowFileContent, updateWorkflowFile, pushScaffoldFiles } from '../github/github.service';
 import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars, fixTerraformDestroyStep, fixTerraformStatePersistence } from '../github/workflow-validator';
+import type { TemplateVariable } from '@idp/shared';
+import { generateTfvarsJson } from '../../utils/tfvars';
 
 async function getOctokit(userId: string): Promise<Octokit> {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -30,6 +32,7 @@ async function pushTemplateFiles(
   repo: string,
   templatePath: string,
   variables: Record<string, string>,
+  templateVarDefs: TemplateVariable[],
 ): Promise<void> {
   const emitter = getLogEmitter(deploymentId);
 
@@ -49,11 +52,9 @@ async function pushTemplateFiles(
       content: fs.readFileSync(path.join(absTemplatePath, f), 'utf-8'),
     }));
 
-    // Generate terraform.tfvars
-    const tfvars = Object.entries(variables)
-      .map(([k, v]) => `${k} = "${v.replace(/"/g, '\\"')}"`)
-      .join('\n');
-    files.push({ path: 'terraform/terraform.tfvars', content: tfvars });
+    // Generate typed terraform.tfvars.json
+    const tfvarsJson = generateTfvarsJson(variables, templateVarDefs);
+    files.push({ path: 'terraform/terraform.tfvars.json', content: tfvarsJson });
 
     emitter.emit('log', { type: 'status', message: `Pushing ${files.length} template files to ${owner}/${repo}/terraform/` });
     await pushScaffoldFiles(userId, owner, repo, files);
@@ -231,8 +232,9 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   const workflowId = deployment.githubWorkflowId!;
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
+  const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
+  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
   const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
   await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
@@ -295,8 +297,9 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   const workflowId = deployment.githubWorkflowId!;
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
+  const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
+  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
   const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
   await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
@@ -358,8 +361,9 @@ export async function dispatchRollback(deploymentId: string, userId: string): Pr
   const workflowId = deployment.githubWorkflowId!;
   const ref = deployment.githubRef || 'main';
   const variables = JSON.parse(deployment.variables);
+  const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
+  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
   const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
   await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 

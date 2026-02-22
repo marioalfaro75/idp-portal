@@ -1,11 +1,13 @@
 import { prisma } from '../../prisma';
-import { NotFoundError, ConflictError, AppError } from '../../utils/errors';
+import { NotFoundError, ConflictError, AppError, ValidationError } from '../../utils/errors';
 import { deploymentQueue } from './deployment-queue';
 import * as terraformRunner from './terraform-runner';
 import * as githubExecutor from './github-executor';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
+import type { TemplateVariable } from '@idp/shared';
+import { validateVariables } from '@idp/shared';
 
 // SSE log emitters per deployment
 const logEmitters = new Map<string, EventEmitter>();
@@ -51,6 +53,13 @@ export async function create(data: { name: string; templateId: string; cloudConn
 
   if (connection.provider !== template.provider) {
     throw new AppError(400, `Cloud connection provider (${connection.provider}) doesn't match template provider (${template.provider})`);
+  }
+
+  // Validate variables against template definitions
+  const templateVars: TemplateVariable[] = JSON.parse(template.variables || '[]');
+  const varErrors = validateVariables(data.variables, templateVars);
+  if (Object.keys(varErrors).length > 0) {
+    throw new ValidationError('Variable validation failed', varErrors);
   }
 
   const executionMethod = data.executionMethod || 'local';
@@ -105,6 +114,7 @@ async function executePlanAndApply(deploymentId: string) {
 
     const { credentials } = await cloudConnectionService.getDecryptedCredentials(deployment.cloudConnectionId);
     const variables = JSON.parse(deployment.variables);
+    const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
     // Plan phase
     await prisma.deployment.update({ where: { id: deploymentId }, data: { status: 'planning' } });
@@ -115,6 +125,7 @@ async function executePlanAndApply(deploymentId: string) {
       variables,
       deployment.template.provider,
       credentials,
+      templateVarDefs,
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
 
@@ -138,6 +149,7 @@ async function executePlanAndApply(deploymentId: string) {
       variables,
       deployment.template.provider,
       credentials,
+      templateVarDefs,
       deployment.terraformState,
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
@@ -246,6 +258,7 @@ async function executeRollback(deploymentId: string) {
 
     const { credentials } = await cloudConnectionService.getDecryptedCredentials(deployment.cloudConnectionId);
     const variables = JSON.parse(deployment.variables);
+    const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
     emitter.emit('log', { type: 'status', message: 'Rolling back...' });
 
@@ -254,6 +267,7 @@ async function executeRollback(deploymentId: string) {
       variables,
       deployment.template.provider,
       credentials,
+      templateVarDefs,
       deployment.terraformState,
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
@@ -299,6 +313,7 @@ async function executeDestroy(deploymentId: string) {
 
     const { credentials } = await cloudConnectionService.getDecryptedCredentials(deployment.cloudConnectionId);
     const variables = JSON.parse(deployment.variables);
+    const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
     emitter.emit('log', { type: 'status', message: 'Destroying...' });
 
@@ -307,6 +322,7 @@ async function executeDestroy(deploymentId: string) {
       variables,
       deployment.template.provider,
       credentials,
+      templateVarDefs,
       deployment.terraformState,
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
