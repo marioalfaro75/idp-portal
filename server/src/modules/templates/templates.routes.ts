@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
-import { PERMISSIONS } from '@idp/shared';
+import { PERMISSIONS, updateTemplateTagsSchema } from '@idp/shared';
+import { validate } from '../../middleware/validate';
 import * as service from './templates.service';
 import * as auditService from '../audit/audit.service';
 
@@ -21,6 +22,12 @@ router.get('/', authorize(PERMISSIONS.TEMPLATES_LIST), asyncHandler(async (req, 
 
 router.get('/slug/:slug', authorize(PERMISSIONS.TEMPLATES_LIST), asyncHandler(async (req, res) => {
   const template = await service.getBySlug(req.params.slug, req.user!);
+  res.json(template);
+}));
+
+router.patch('/:id/tags', authorize(PERMISSIONS.TEMPLATES_EDIT), validate(updateTemplateTagsSchema), asyncHandler(async (req, res) => {
+  const template = await service.updateTags(req.params.id, req.body.tags);
+  await auditService.log({ action: 'update_tags', resource: 'template', resourceId: req.params.id, userId: req.user!.sub, ipAddress: req.ip, details: { tags: req.body.tags } });
   res.json(template);
 }));
 

@@ -7,4 +7,6 @@ export const templatesApi = {
   get: (id: string) => api.get<Template>(`/templates/${id}`).then((r) => r.data),
   getBySlug: (slug: string) => api.get<Template>(`/templates/slug/${slug}`).then((r) => r.data),
   sync: () => api.post<{ count: number }>('/templates/sync').then((r) => r.data),
+  updateTags: (id: string, tags: string[]) =>
+    api.patch<Template>(`/templates/${id}/tags`, { tags }).then((r) => r.data),
 };

@@ -10,6 +10,7 @@ export const PERMISSIONS = {
   CLOUD_CONNECTIONS_DELETE: 'cloud_connections.delete',
   TEMPLATES_LIST: 'templates.list',
   TEMPLATES_SYNC: 'templates.sync',
+  TEMPLATES_EDIT: 'templates.edit',
   DEPLOYMENTS_LIST: 'deployments.list',
   DEPLOYMENTS_CREATE: 'deployments.create',
   DEPLOYMENTS_DESTROY: 'deployments.destroy',

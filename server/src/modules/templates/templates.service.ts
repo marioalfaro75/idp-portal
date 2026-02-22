@@ -81,7 +81,6 @@ export async function sync(): Promise<number> {
         templatePath: t.templatePath,
         variables: JSON.stringify(t.variables),
         outputs: JSON.stringify(t.outputs),
-        tags: JSON.stringify(t.metadata.tags),
         workflow: t.workflow,
         hasScaffold: t.hasScaffold,
       },
@@ -89,6 +88,18 @@ export async function sync(): Promise<number> {
   }
 
   return parsed.length;
+}
+
+export async function updateTags(id: string, tags: string[]) {
+  const template = await prisma.template.findUnique({ where: { id } });
+  if (!template) throw new NotFoundError('Template');
+
+  const updated = await prisma.template.update({
+    where: { id },
+    data: { tags: JSON.stringify(tags) },
+  });
+
+  return formatTemplate(updated);
 }
 
 function formatTemplate(t: any) {
