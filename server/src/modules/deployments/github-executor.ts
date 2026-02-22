@@ -8,7 +8,7 @@ import { logger } from '../../utils/logger';
 import { getLogEmitter } from './deployments.service';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { listWorkflows, getWorkflowFileContent, updateWorkflowFile, pushScaffoldFiles } from '../github/github.service';
-import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars, fixTerraformDestroyStep, fixPermissionsContentsWrite, fixTerraformStatePersistence } from '../github/workflow-validator';
+import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars, fixTerraformDestroyStep, fixTerraformStatePersistence } from '../github/workflow-validator';
 
 async function getOctokit(userId: string): Promise<Octokit> {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -180,8 +180,7 @@ async function ensureWorkflowReady(
     const applyFix = fixTerraformApplyCondition(fmtFix.fixed);
     const envFix = fixTerraformEnvVars(applyFix.fixed, credentialSecretNames);
     const destroyFix = fixTerraformDestroyStep(envFix.fixed);
-    const permsFix = fixPermissionsContentsWrite(destroyFix.fixed);
-    const stateFix = fixTerraformStatePersistence(permsFix.fixed);
+    const stateFix = fixTerraformStatePersistence(destroyFix.fixed);
 
     const allChanges = [...result.changes];
     if (wrapperFix.changed) allChanges.push('Set terraform_wrapper: false on setup-terraform');
@@ -190,11 +189,10 @@ async function ensureWorkflowReady(
     if (applyFix.changed) allChanges.push('Fixed Terraform Apply condition for workflow_dispatch');
     if (envFix.changed) allChanges.push('Added cloud credential env vars from repo secrets');
     if (destroyFix.changed) allChanges.push('Added Terraform Destroy step for destroy/rollback actions');
-    if (permsFix.changed) allChanges.push('Updated permissions.contents to write for state persistence');
-    if (stateFix.changed) allChanges.push('Added steps to persist terraform state to repo');
+    if (stateFix.changed) allChanges.push('Added artifact-based terraform state persistence');
 
     const finalContent = stateFix.fixed;
-    const anyFixApplied = wrapperFix.changed || workDirFix.changed || fmtFix.changed || applyFix.changed || envFix.changed || destroyFix.changed || permsFix.changed || stateFix.changed;
+    const anyFixApplied = wrapperFix.changed || workDirFix.changed || fmtFix.changed || applyFix.changed || envFix.changed || destroyFix.changed || stateFix.changed;
     const needsUpdate = !result.valid || anyFixApplied;
 
     if (!needsUpdate) {

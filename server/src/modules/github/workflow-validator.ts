@@ -555,81 +555,168 @@ export function fixTerraformDestroyStep(content: string): { fixed: string; chang
 }
 
 /**
- * Ensures `permissions.contents` is `write` so the workflow can commit
- * terraform state back to the repo after apply/destroy.
- */
-export function fixPermissionsContentsWrite(content: string): { fixed: string; changed: boolean } {
-  // Match `contents: read` under a permissions block
-  const regex = /^(\s*contents:\s*)read\s*$/m;
-  if (!regex.test(content)) {
-    return { fixed: content, changed: false };
-  }
-  const fixed = content.replace(regex, '$1write');
-  return { fixed, changed: true };
-}
-
-/**
- * Adds a step to commit terraform.tfstate back to the repo after
- * apply and destroy, so state persists across workflow runs.
+ * Manages terraform state persistence using GitHub Actions artifacts
+ * instead of committing state to the repo (which triggers push protection
+ * since state files contain secrets like access keys).
+ *
+ * Adds two steps:
+ * 1. "Restore Terraform State" — after checkout, downloads the latest
+ *    state artifact from a previous workflow run via the GitHub API.
+ * 2. "Save Terraform State" — at the end, uploads terraform.tfstate
+ *    as an artifact using actions/upload-artifact@v4.
  */
 export function fixTerraformStatePersistence(content: string): { fixed: string; changed: boolean } {
-  if (/name:\s*Save Terraform State/m.test(content)) {
+  const hasArtifactSave = /name:\s*Save Terraform State/m.test(content) && /upload-artifact/m.test(content);
+  const hasRestore = /name:\s*Restore Terraform State/m.test(content);
+
+  // Already has artifact-based state management
+  if (hasArtifactSave && hasRestore) {
     return { fixed: content, changed: false };
   }
 
-  // Find the last step to determine indent and insertion point
-  const lines = content.split('\n');
-  let lastStepLine = -1;
-  let stepIndent = '    ';
+  let fixed = content;
+  let changed = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^(\s*)-\s*name:\s*/);
-    if (m) {
-      lastStepLine = i;
-      stepIndent = m[1];
+  // Remove old git-based "Save Terraform State" step if present
+  const hasOldGitSave = /name:\s*Save Terraform State/m.test(fixed) && !hasArtifactSave;
+  if (hasOldGitSave) {
+    const lines = fixed.split('\n');
+    const result: string[] = [];
+    let i = 0;
+    while (i < lines.length) {
+      const match = lines[i].match(/^(\s*)-\s*name:\s*Save Terraform State/);
+      if (match) {
+        const si = match[1];
+        const pi = si + '  ';
+        if (result.length > 0 && result[result.length - 1].trim() === '') {
+          result.pop();
+        }
+        i++;
+        while (i < lines.length) {
+          if (lines[i].trim() === '') { i++; continue; }
+          if (lines[i].match(new RegExp(`^${si}-\\s`))) break;
+          if (!lines[i].startsWith(pi)) break;
+          i++;
+        }
+        changed = true;
+        continue;
+      }
+      result.push(lines[i]);
+      i++;
+    }
+    fixed = result.join('\n');
+  }
+
+  // Add "Restore Terraform State" step after checkout
+  if (!hasRestore) {
+    const lines = fixed.split('\n');
+    const result: string[] = [];
+    let inserted = false;
+    let i = 0;
+
+    while (i < lines.length) {
+      result.push(lines[i]);
+
+      if (!inserted && /uses:\s*actions\/checkout/.test(lines[i])) {
+        let stepIndent = '      ';
+        for (let j = result.length - 1; j >= 0; j--) {
+          const m = result[j].match(/^(\s*)-\s*(name:|uses:)/);
+          if (m) { stepIndent = m[1]; break; }
+        }
+        const propIndent = stepIndent + '  ';
+
+        // Continue past remaining checkout step lines
+        i++;
+        while (i < lines.length) {
+          if (lines[i].match(new RegExp(`^${stepIndent}-\\s`)) ||
+              (lines[i].trim() !== '' && !lines[i].startsWith(propIndent))) {
+            break;
+          }
+          result.push(lines[i]);
+          i++;
+        }
+
+        result.push('');
+        result.push(`${stepIndent}- name: Restore Terraform State`);
+        result.push(`${propIndent}if: github.event_name == 'workflow_dispatch'`);
+        result.push(`${propIndent}continue-on-error: true`);
+        result.push(`${propIndent}env:`);
+        result.push(`${propIndent}  GH_TOKEN: \${{ github.token }}`);
+        result.push(`${propIndent}working-directory: \${{ github.workspace }}`);
+        result.push(`${propIndent}run: |`);
+        result.push(`${propIndent}  ARTIFACT_NAME="terraform-state-\${{ inputs.deployment_id }}"`);
+        result.push(`${propIndent}  ARTIFACT_ID=$(gh api "repos/\${{ github.repository }}/actions/artifacts?name=\${ARTIFACT_NAME}&per_page=1" --jq '.artifacts[0].id // empty' 2>/dev/null || true)`);
+        result.push(`${propIndent}  if [ -n "$ARTIFACT_ID" ]; then`);
+        result.push(`${propIndent}    echo "Restoring state from artifact \${ARTIFACT_ID}"`);
+        result.push(`${propIndent}    gh api "repos/\${{ github.repository }}/actions/artifacts/\${ARTIFACT_ID}/zip" > /tmp/state.zip`);
+        result.push(`${propIndent}    unzip -o /tmp/state.zip -d terraform/`);
+        result.push(`${propIndent}    rm /tmp/state.zip`);
+        result.push(`${propIndent}    echo "Terraform state restored"`);
+        result.push(`${propIndent}  else`);
+        result.push(`${propIndent}    echo "No previous state found"`);
+        result.push(`${propIndent}  fi`);
+
+        inserted = true;
+        changed = true;
+        continue;
+      }
+
+      i++;
+    }
+
+    fixed = result.join('\n');
+  }
+
+  // Add artifact-based "Save Terraform State" step at end
+  if (!hasArtifactSave) {
+    const lines = fixed.split('\n');
+    let lastStepLine = -1;
+    let stepIndent = '      ';
+
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^(\s*)-\s*name:\s*/);
+      if (m) {
+        lastStepLine = i;
+        stepIndent = m[1];
+      }
+    }
+
+    if (lastStepLine !== -1) {
+      const propIndent = stepIndent + '  ';
+      let insertAfter = lastStepLine;
+      for (let i = lastStepLine + 1; i < lines.length; i++) {
+        if (lines[i].match(new RegExp(`^${stepIndent}-\\s`))) break;
+        if (lines[i].trim() === '' || lines[i].startsWith(propIndent)) {
+          insertAfter = i;
+        } else {
+          break;
+        }
+      }
+
+      const saveStep = [
+        '',
+        `${stepIndent}- name: Save Terraform State`,
+        `${propIndent}if: always() && github.event_name == 'workflow_dispatch'`,
+        `${propIndent}uses: actions/upload-artifact@v4`,
+        `${propIndent}with:`,
+        `${propIndent}  name: terraform-state-\${{ inputs.deployment_id }}`,
+        `${propIndent}  path: terraform/terraform.tfstate`,
+        `${propIndent}  if-no-files-found: ignore`,
+        `${propIndent}  overwrite: true`,
+      ];
+
+      const result = [
+        ...lines.slice(0, insertAfter + 1),
+        ...saveStep,
+        ...lines.slice(insertAfter + 1),
+      ];
+
+      fixed = result.join('\n');
+      changed = true;
     }
   }
 
-  if (lastStepLine === -1) {
-    return { fixed: content, changed: false };
-  }
-
-  // Find the end of the last step
-  const propIndent = stepIndent + '  ';
-  let insertAfter = lastStepLine;
-  for (let i = lastStepLine + 1; i < lines.length; i++) {
-    if (lines[i].match(new RegExp(`^${stepIndent}-\\s`))) break;
-    if (lines[i].trim() === '' || lines[i].startsWith(propIndent)) {
-      insertAfter = i;
-    } else {
-      break;
-    }
-  }
-
-  const saveStep = [
-    '',
-    `${stepIndent}- name: Save Terraform State`,
-    `${propIndent}if: always() && github.event_name == 'workflow_dispatch'`,
-    `${propIndent}working-directory: \${{ github.workspace }}`,
-    `${propIndent}run: |`,
-    `${propIndent}  git config user.name "github-actions[bot]"`,
-    `${propIndent}  git config user.email "github-actions[bot]@users.noreply.github.com"`,
-    `${propIndent}  git pull --rebase origin main || true`,
-    `${propIndent}  if [ -f terraform/terraform.tfstate ]; then`,
-    `${propIndent}    git add -f terraform/terraform.tfstate`,
-    `${propIndent}  else`,
-    `${propIndent}    git rm -f terraform/terraform.tfstate 2>/dev/null || true`,
-    `${propIndent}  fi`,
-    `${propIndent}  git diff --cached --quiet || (git commit -m "Update terraform state [skip ci]" && git push)`,
-  ];
-
-  const result = [
-    ...lines.slice(0, insertAfter + 1),
-    ...saveStep,
-    ...lines.slice(insertAfter + 1),
-  ];
-
-  return { fixed: result.join('\n'), changed: true };
+  return { fixed, changed };
 }
 
 function buildInputsBlock(inputs: string[]): string {
