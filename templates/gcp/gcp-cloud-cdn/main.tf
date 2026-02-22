@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -31,7 +33,7 @@ resource "google_storage_bucket" "cdn_bucket" {
     max_age_seconds = 3600
   }
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_storage_bucket_iam_member" "public_read" {

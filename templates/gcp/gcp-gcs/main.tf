@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -73,7 +75,7 @@ resource "google_storage_bucket" "bucket" {
     }
   }
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_storage_bucket_iam_member" "members" {

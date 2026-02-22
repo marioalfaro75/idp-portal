@@ -74,3 +74,9 @@ variable "workload_identity_bindings" {
   }))
   default = []
 }
+
+variable "labels" {
+  description = "Labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

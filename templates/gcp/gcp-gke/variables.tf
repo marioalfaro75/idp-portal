@@ -61,6 +61,11 @@ variable "master_ipv4_cidr_block" {
   description = "CIDR block for the master network (must be /28)"
   type        = string
   default     = "172.16.0.0/28"
+
+  validation {
+    condition     = can(cidrhost(var.master_ipv4_cidr_block, 0)) && tonumber(split("/", var.master_ipv4_cidr_block)[1]) == 28
+    error_message = "master_ipv4_cidr_block must be a valid /28 CIDR block."
+  }
 }
 
 variable "release_channel" {
@@ -144,6 +149,11 @@ variable "node_disk_type" {
   description = "Disk type for GKE nodes"
   type        = string
   default     = "pd-balanced"
+
+  validation {
+    condition     = contains(["pd-standard", "pd-ssd", "pd-balanced"], var.node_disk_type)
+    error_message = "node_disk_type must be pd-standard, pd-ssd, or pd-balanced."
+  }
 }
 
 variable "node_service_account" {

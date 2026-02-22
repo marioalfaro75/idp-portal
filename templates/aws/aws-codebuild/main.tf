@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 }
@@ -20,6 +23,10 @@ resource "aws_iam_role" "codebuild" {
       Effect = "Allow"
       Principal = { Service = "codebuild.amazonaws.com" }
     }]
+  })
+
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
   })
 }
 
@@ -76,8 +83,7 @@ resource "aws_codebuild_project" "this" {
     }
   }
 
-  tags = {
-    Name        = var.project_name
-    Environment = var.environment
-  }
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }

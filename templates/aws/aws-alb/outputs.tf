@@ -37,3 +37,8 @@ output "https_listener_arn" {
   description = "ARN of the HTTPS listener (empty if HTTPS is not enabled)"
   value       = try(aws_lb_listener.https[0].arn, "")
 }
+
+output "listener_arns" {
+  description = "ALB listener ARNs"
+  value       = { http = aws_lb_listener.http.arn }
+}

@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_mssql_server" "this" {
@@ -25,7 +27,7 @@ resource "azurerm_mssql_server" "this" {
   administrator_login          = var.admin_username
   administrator_login_password = var.admin_password
   minimum_tls_version          = var.minimum_tls_version
-  tags                         = var.tags
+  tags                         = merge(var.tags, { ManagedBy = "terraform" })
 
   azuread_administrator {
     login_username = var.azuread_admin_username
@@ -42,7 +44,7 @@ resource "azurerm_mssql_database" "this" {
   zone_redundant              = var.zone_redundant
   auto_pause_delay_in_minutes = var.auto_pause_delay
   min_capacity                = var.min_capacity
-  tags                        = var.tags
+  tags                        = merge(var.tags, { ManagedBy = "terraform" })
 
   short_term_retention_policy {
     retention_days           = var.short_term_retention_days
@@ -70,4 +72,11 @@ resource "azurerm_mssql_firewall_rule" "custom_rules" {
   server_id        = azurerm_mssql_server.this.id
   start_ip_address = each.value.start_ip
   end_ip_address   = each.value.end_ip
+}
+
+resource "azurerm_management_lock" "this" {
+  count      = var.lock != null ? 1 : 0
+  name       = coalesce(var.lock.name, "${var.server_name}-lock")
+  scope      = azurerm_mssql_server.this.id
+  lock_level = var.lock.kind
 }

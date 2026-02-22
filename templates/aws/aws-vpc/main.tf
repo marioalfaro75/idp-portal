@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -21,7 +23,8 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-vpc"
+    Name      = "${var.project_name}-vpc"
+    ManagedBy = "terraform"
   })
 }
 
@@ -29,7 +32,8 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-igw"
+    Name      = "${var.project_name}-igw"
+    ManagedBy = "terraform"
   })
 }
 
@@ -41,8 +45,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-public-${count.index + 1}"
-    Tier = "public"
+    Name      = "${var.project_name}-public-${count.index + 1}"
+    Tier      = "public"
+    ManagedBy = "terraform"
   })
 }
 
@@ -53,8 +58,9 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-private-${count.index + 1}"
-    Tier = "private"
+    Name      = "${var.project_name}-private-${count.index + 1}"
+    Tier      = "private"
+    ManagedBy = "terraform"
   })
 }
 
@@ -63,7 +69,8 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}"
+    Name      = "${var.project_name}-nat-eip-${count.index + 1}"
+    ManagedBy = "terraform"
   })
 }
 
@@ -73,7 +80,8 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-nat-${count.index + 1}"
+    Name      = "${var.project_name}-nat-${count.index + 1}"
+    ManagedBy = "terraform"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -88,7 +96,8 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-public-rt"
+    Name      = "${var.project_name}-public-rt"
+    ManagedBy = "terraform"
   })
 }
 
@@ -102,7 +111,8 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
+    Name      = "${var.project_name}-private-rt-${count.index + 1}"
+    ManagedBy = "terraform"
   })
 }
 

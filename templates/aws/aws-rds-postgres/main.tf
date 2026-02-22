@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -16,7 +18,8 @@ resource "aws_db_subnet_group" "main" {
   subnet_ids = var.subnet_ids
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-db-subnet-group"
+    Name      = "${var.project_name}-db-subnet-group"
+    ManagedBy = "terraform"
   })
 }
 
@@ -49,8 +52,13 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-rds-sg"
+    Name      = "${var.project_name}-rds-sg"
+    ManagedBy = "terraform"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_db_parameter_group" "main" {
@@ -72,7 +80,13 @@ resource "aws_db_parameter_group" "main" {
     value = var.slow_query_log_threshold
   }
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_db_instance" "main" {
@@ -111,6 +125,11 @@ resource "aws_db_instance" "main" {
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-postgres"
+    Name      = "${var.project_name}-postgres"
+    ManagedBy = "terraform"
   })
+
+  lifecycle {
+    ignore_changes = [password]
+  }
 }

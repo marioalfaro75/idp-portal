@@ -12,18 +12,33 @@ variable "location" {
 variable "key_vault_name" {
   description = "Name of the Key Vault (must be globally unique)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$", var.key_vault_name))
+    error_message = "key_vault_name must be 3-24 characters, start with a letter, and contain only alphanumeric characters and hyphens."
+  }
 }
 
 variable "sku_name" {
   description = "SKU name for the Key Vault (standard or premium)"
   type        = string
   default     = "standard"
+
+  validation {
+    condition     = contains(["standard", "premium"], var.sku_name)
+    error_message = "sku_name must be standard or premium."
+  }
 }
 
 variable "soft_delete_retention_days" {
   description = "Number of days to retain soft-deleted vaults"
   type        = number
   default     = 90
+
+  validation {
+    condition     = var.soft_delete_retention_days >= 7 && var.soft_delete_retention_days <= 90
+    error_message = "soft_delete_retention_days must be between 7 and 90."
+  }
 }
 
 variable "purge_protection_enabled" {
@@ -102,6 +117,20 @@ variable "secrets" {
   type        = map(string)
   default     = {}
   sensitive   = true
+}
+
+variable "lock" {
+  description = "Resource lock configuration (CanNotDelete or ReadOnly)"
+  type = object({
+    kind = string
+    name = optional(string, null)
+  })
+  default = null
+
+  validation {
+    condition     = var.lock == null || contains(["CanNotDelete", "ReadOnly"], var.lock.kind)
+    error_message = "lock.kind must be CanNotDelete or ReadOnly."
+  }
 }
 
 variable "tags" {

@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -40,8 +42,13 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-alb-sg"
+    Name      = "${var.project_name}-alb-sg"
+    ManagedBy = "terraform"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lb" "main" {
@@ -60,7 +67,8 @@ resource "aws_lb" "main" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-alb"
+    Name      = "${var.project_name}-alb"
+    ManagedBy = "terraform"
   })
 }
 
@@ -83,7 +91,8 @@ resource "aws_lb_target_group" "main" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-tg"
+    Name      = "${var.project_name}-tg"
+    ManagedBy = "terraform"
   })
 }
 

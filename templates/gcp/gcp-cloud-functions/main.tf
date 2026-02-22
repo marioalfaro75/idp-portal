@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -88,7 +90,7 @@ resource "google_cloudfunctions2_function" "function" {
     }
   }
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_cloud_run_service_iam_member" "invoker" {

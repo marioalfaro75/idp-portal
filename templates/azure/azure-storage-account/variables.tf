@@ -12,18 +12,33 @@ variable "location" {
 variable "storage_account_name" {
   description = "Name of the storage account (must be globally unique, 3-24 chars, lowercase alphanumeric)"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9]{3,24}$", var.storage_account_name))
+    error_message = "storage_account_name must be 3-24 characters, lowercase letters and numbers only."
+  }
 }
 
 variable "account_tier" {
   description = "Performance tier (Standard or Premium)"
   type        = string
   default     = "Standard"
+
+  validation {
+    condition     = contains(["Standard", "Premium"], var.account_tier)
+    error_message = "account_tier must be Standard or Premium."
+  }
 }
 
 variable "replication_type" {
   description = "Replication type (LRS, GRS, RAGRS, ZRS, GZRS, RAGZRS)"
   type        = string
   default     = "LRS"
+
+  validation {
+    condition     = contains(["LRS", "GRS", "RAGRS", "ZRS", "GZRS", "RAGZRS"], var.replication_type)
+    error_message = "replication_type must be LRS, GRS, RAGRS, ZRS, GZRS, or RAGZRS."
+  }
 }
 
 variable "account_kind" {
@@ -36,12 +51,22 @@ variable "access_tier" {
   description = "Access tier for blob storage (Hot or Cool)"
   type        = string
   default     = "Hot"
+
+  validation {
+    condition     = contains(["Hot", "Cool"], var.access_tier)
+    error_message = "access_tier must be Hot or Cool."
+  }
 }
 
 variable "min_tls_version" {
   description = "Minimum TLS version"
   type        = string
   default     = "TLS1_2"
+
+  validation {
+    condition     = contains(["TLS1_0", "TLS1_1", "TLS1_2"], var.min_tls_version)
+    error_message = "min_tls_version must be TLS1_0, TLS1_1, or TLS1_2."
+  }
 }
 
 variable "allow_public_access" {
@@ -114,6 +139,20 @@ variable "file_shares" {
     quota_gb = number
   }))
   default = []
+}
+
+variable "lock" {
+  description = "Resource lock configuration (CanNotDelete or ReadOnly)"
+  type = object({
+    kind = string
+    name = optional(string, null)
+  })
+  default = null
+
+  validation {
+    condition     = var.lock == null || contains(["CanNotDelete", "ReadOnly"], var.lock.kind)
+    error_message = "lock.kind must be CanNotDelete or ReadOnly."
+  }
 }
 
 variable "tags" {

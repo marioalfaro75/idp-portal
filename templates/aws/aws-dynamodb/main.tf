@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -79,8 +81,13 @@ resource "aws_dynamodb_table" "main" {
   stream_view_type = var.stream_enabled ? var.stream_view_type : null
 
   tags = merge(var.tags, {
-    Name = var.table_name
+    Name      = var.table_name
+    ManagedBy = "terraform"
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_appautoscaling_target" "read" {

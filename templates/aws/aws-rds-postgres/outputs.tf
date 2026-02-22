@@ -37,3 +37,28 @@ output "db_subnet_group_name" {
   description = "Name of the DB subnet group"
   value       = aws_db_subnet_group.main.name
 }
+
+output "hosted_zone_id" {
+  description = "RDS instance hosted zone ID"
+  value       = aws_db_instance.main.hosted_zone_id
+}
+
+output "resource_id" {
+  description = "RDS instance resource ID"
+  value       = aws_db_instance.main.resource_id
+}
+
+output "engine_version_actual" {
+  description = "Running engine version"
+  value       = aws_db_instance.main.engine_version_actual
+}
+
+output "status" {
+  description = "RDS instance status"
+  value       = aws_db_instance.main.status
+}
+
+output "parameter_group_id" {
+  description = "DB parameter group ID"
+  value       = aws_db_parameter_group.main.id
+}

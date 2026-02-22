@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -16,7 +18,8 @@ resource "aws_s3_bucket" "main" {
   force_destroy = var.force_destroy
 
   tags = merge(var.tags, {
-    Name = var.bucket_name
+    Name      = var.bucket_name
+    ManagedBy = "terraform"
   })
 }
 

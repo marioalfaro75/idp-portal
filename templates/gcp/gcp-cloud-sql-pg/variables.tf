@@ -31,6 +31,11 @@ variable "availability_type" {
   description = "Availability type: REGIONAL for HA, ZONAL for single zone"
   type        = string
   default     = "REGIONAL"
+
+  validation {
+    condition     = contains(["ZONAL", "REGIONAL"], var.availability_type)
+    error_message = "availability_type must be ZONAL or REGIONAL."
+  }
 }
 
 variable "disk_size_gb" {
@@ -43,6 +48,11 @@ variable "disk_type" {
   description = "Disk type: PD_SSD or PD_HDD"
   type        = string
   default     = "PD_SSD"
+
+  validation {
+    condition     = contains(["PD_SSD", "PD_HDD"], var.disk_type)
+    error_message = "disk_type must be PD_SSD or PD_HDD."
+  }
 }
 
 variable "disk_autoresize" {
@@ -130,6 +140,11 @@ variable "maintenance_window_day" {
   description = "Day of week for maintenance window (1=Monday, 7=Sunday)"
   type        = number
   default     = 7
+
+  validation {
+    condition     = var.maintenance_window_day >= 1 && var.maintenance_window_day <= 7
+    error_message = "maintenance_window_day must be between 1 (Monday) and 7 (Sunday)."
+  }
 }
 
 variable "maintenance_window_hour" {

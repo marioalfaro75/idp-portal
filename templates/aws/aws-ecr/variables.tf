@@ -12,7 +12,12 @@ variable "repository_name" {
 variable "image_tag_mutability" {
   type        = string
   description = "Image tag mutability setting"
-  default     = "MUTABLE"
+  default     = "IMMUTABLE"
+
+  validation {
+    condition     = contains(["MUTABLE", "IMMUTABLE"], var.image_tag_mutability)
+    error_message = "image_tag_mutability must be MUTABLE or IMMUTABLE."
+  }
 }
 
 variable "scan_on_push" {
@@ -27,8 +32,14 @@ variable "max_image_count" {
   default     = 30
 }
 
-variable "environment" {
+variable "kms_key_arn" {
   type        = string
-  description = "Environment name"
-  default     = "dev"
+  description = "KMS key ARN for ECR encryption (uses AES256 if not set)"
+  default     = null
+}
+
+variable "tags" {
+  description = "Additional tags to apply to all resources"
+  type        = map(string)
+  default     = {}
 }

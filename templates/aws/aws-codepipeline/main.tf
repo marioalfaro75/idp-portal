@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -19,7 +21,8 @@ resource "aws_s3_bucket" "artifact_store" {
   force_destroy = true
 
   tags = merge(var.tags, {
-    Name = "${var.pipeline_name}-artifacts"
+    Name      = "${var.pipeline_name}-artifacts"
+    ManagedBy = "terraform"
   })
 }
 
@@ -58,7 +61,9 @@ resource "aws_iam_role" "codepipeline" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy" "codepipeline" {
@@ -201,5 +206,7 @@ resource "aws_codepipeline" "main" {
     }
   }
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }

@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_linux_virtual_machine_scale_set" "this" {
@@ -26,7 +28,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "this" {
   admin_username                  = var.admin_username
   disable_password_authentication = true
   upgrade_mode                    = var.upgrade_mode
-  tags                            = var.tags
+  tags                            = merge(var.tags, { ManagedBy = "terraform" })
 
   admin_ssh_key {
     username   = var.admin_username

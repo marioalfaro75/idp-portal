@@ -32,3 +32,18 @@ output "public_route_table_id" {
   description = "ID of the public route table"
   value       = aws_route_table.public.id
 }
+
+output "private_route_table_ids" {
+  description = "Private route table IDs"
+  value       = aws_route_table.private[*].id
+}
+
+output "availability_zones" {
+  description = "Availability zones used"
+  value       = data.aws_availability_zones.available.names
+}
+
+output "vpc_owner_id" {
+  description = "VPC owner account ID"
+  value       = aws_vpc.main.owner_id
+}

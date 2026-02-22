@@ -25,6 +25,11 @@ variable "max_session_duration" {
   description = "Maximum session duration in seconds (1 hour to 12 hours)"
   type        = number
   default     = 3600
+
+  validation {
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
+    error_message = "max_session_duration must be between 3600 and 43200 seconds."
+  }
 }
 
 variable "trusted_services" {

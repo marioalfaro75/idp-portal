@@ -19,6 +19,11 @@ variable "key_usage" {
   description = "Key usage (ENCRYPT_DECRYPT or SIGN_VERIFY)"
   type        = string
   default     = "ENCRYPT_DECRYPT"
+
+  validation {
+    condition     = contains(["ENCRYPT_DECRYPT", "SIGN_VERIFY", "GENERATE_VERIFY_MAC"], var.key_usage)
+    error_message = "key_usage must be ENCRYPT_DECRYPT, SIGN_VERIFY, or GENERATE_VERIFY_MAC."
+  }
 }
 
 variable "key_spec" {
@@ -31,6 +36,11 @@ variable "deletion_window_in_days" {
   description = "Waiting period before the key is deleted (7-30 days)"
   type        = number
   default     = 30
+
+  validation {
+    condition     = var.deletion_window_in_days >= 7 && var.deletion_window_in_days <= 30
+    error_message = "deletion_window_in_days must be between 7 and 30."
+  }
 }
 
 variable "enable_key_rotation" {

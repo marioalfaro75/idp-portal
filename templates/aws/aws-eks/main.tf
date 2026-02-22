@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -27,7 +29,9 @@ resource "aws_iam_role" "cluster" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "cluster_policy" {
@@ -53,8 +57,13 @@ resource "aws_security_group" "cluster" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.cluster_name}-cluster-sg"
+    Name      = "${var.cluster_name}-cluster-sg"
+    ManagedBy = "terraform"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_eks_cluster" "main" {
@@ -67,11 +76,14 @@ resource "aws_eks_cluster" "main" {
     security_group_ids      = [aws_security_group.cluster.id]
     endpoint_private_access = var.endpoint_private_access
     endpoint_public_access  = var.endpoint_public_access
+    public_access_cidrs     = var.endpoint_public_access ? var.public_access_cidrs : null
   }
 
   enabled_cluster_log_types = var.enabled_log_types
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 
   depends_on = [
     aws_iam_role_policy_attachment.cluster_policy,
@@ -95,7 +107,9 @@ resource "aws_iam_role" "node_group" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "node_worker" {
@@ -135,7 +149,9 @@ resource "aws_eks_node_group" "main" {
 
   labels = var.node_labels
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 
   depends_on = [
     aws_iam_role_policy_attachment.node_worker,

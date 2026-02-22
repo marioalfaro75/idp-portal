@@ -13,6 +13,11 @@ variable "billing_mode" {
   description = "Billing mode for the table (PROVISIONED or PAY_PER_REQUEST)"
   type        = string
   default     = "PAY_PER_REQUEST"
+
+  validation {
+    condition     = contains(["PROVISIONED", "PAY_PER_REQUEST"], var.billing_mode)
+    error_message = "billing_mode must be PROVISIONED or PAY_PER_REQUEST."
+  }
 }
 
 variable "hash_key" {
@@ -24,6 +29,11 @@ variable "hash_key_type" {
   description = "Type of the hash key (S, N, or B)"
   type        = string
   default     = "S"
+
+  validation {
+    condition     = contains(["S", "N", "B"], var.hash_key_type)
+    error_message = "hash_key_type must be S, N, or B."
+  }
 }
 
 variable "range_key" {
@@ -36,6 +46,11 @@ variable "range_key_type" {
   description = "Type of the range key (S, N, or B)"
   type        = string
   default     = "S"
+
+  validation {
+    condition     = contains(["S", "N", "B"], var.range_key_type)
+    error_message = "range_key_type must be S, N, or B."
+  }
 }
 
 variable "read_capacity" {
@@ -93,6 +108,11 @@ variable "stream_view_type" {
   description = "Stream view type (NEW_IMAGE, OLD_IMAGE, NEW_AND_OLD_IMAGES, KEYS_ONLY)"
   type        = string
   default     = "NEW_AND_OLD_IMAGES"
+
+  validation {
+    condition     = contains(["KEYS_ONLY", "NEW_IMAGE", "OLD_IMAGE", "NEW_AND_OLD_IMAGES", ""], var.stream_view_type)
+    error_message = "stream_view_type must be KEYS_ONLY, NEW_IMAGE, OLD_IMAGE, NEW_AND_OLD_IMAGES, or empty string."
+  }
 }
 
 variable "enable_autoscaling" {

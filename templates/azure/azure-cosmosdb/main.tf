@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_cosmosdb_account" "this" {
@@ -25,7 +27,7 @@ resource "azurerm_cosmosdb_account" "this" {
   kind                      = var.kind
   automatic_failover_enabled = var.enable_automatic_failover
   free_tier_enabled          = var.enable_free_tier
-  tags                      = var.tags
+  tags                      = merge(var.tags, { ManagedBy = "terraform" })
 
   consistency_policy {
     consistency_level       = var.consistency_level
@@ -91,4 +93,11 @@ resource "azurerm_cosmosdb_sql_container" "this" {
       path = "/\"_etag\"/?"
     }
   }
+}
+
+resource "azurerm_management_lock" "this" {
+  count      = var.lock != null ? 1 : 0
+  name       = coalesce(var.lock.name, "${var.account_name}-lock")
+  scope      = azurerm_cosmosdb_account.this.id
+  lock_level = var.lock.kind
 }

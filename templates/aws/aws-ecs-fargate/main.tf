@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 }
@@ -17,11 +20,27 @@ resource "aws_ecs_cluster" "this" {
     name  = "containerInsights"
     value = "enabled"
   }
+
+  configuration {
+    managed_storage_configuration {
+      kms_key_id = var.kms_key_id
+    }
+  }
+
+  tags = merge(var.tags, {
+    Name      = "${var.service_name}-cluster"
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_cloudwatch_log_group" "this" {
   name              = "/ecs/${var.service_name}"
   retention_in_days = 30
+
+  tags = merge(var.tags, {
+    Name      = "${var.service_name}-logs"
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_ecs_task_definition" "this" {
@@ -75,10 +94,10 @@ resource "aws_security_group" "ecs" {
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = var.container_port
-    to_port     = var.container_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = var.container_port
+    to_port         = var.container_port
+    protocol        = "tcp"
+    security_groups = var.allowed_security_group_ids
   }
 
   egress {
@@ -87,6 +106,11 @@ resource "aws_security_group" "ecs" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = merge(var.tags, {
+    Name      = "${var.service_name}-ecs-sg"
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_ecs_service" "this" {
@@ -99,6 +123,6 @@ resource "aws_ecs_service" "this" {
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = true
+    assign_public_ip = var.assign_public_ip
   }
 }

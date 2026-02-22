@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -30,7 +32,9 @@ resource "aws_iam_role" "step_functions" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy" "step_functions" {
@@ -79,7 +83,9 @@ resource "aws_cloudwatch_log_group" "step_functions" {
   name              = "/aws/states/${var.state_machine_name}"
   retention_in_days = var.log_retention_days
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_sfn_state_machine" "main" {
@@ -99,7 +105,9 @@ resource "aws_sfn_state_machine" "main" {
     enabled = var.enable_xray_tracing
   }
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_cloudwatch_event_rule" "schedule" {
@@ -108,7 +116,9 @@ resource "aws_cloudwatch_event_rule" "schedule" {
   description         = "Scheduled trigger for ${var.state_machine_name}"
   schedule_expression = var.schedule_expression
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role" "eventbridge" {
@@ -128,7 +138,9 @@ resource "aws_iam_role" "eventbridge" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy" "eventbridge" {

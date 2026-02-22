@@ -29,6 +29,11 @@ variable "sku_tier" {
   description = "SKU tier for the AKS cluster (Free or Standard)"
   type        = string
   default     = "Free"
+
+  validation {
+    condition     = contains(["Free", "Standard", "Premium"], var.sku_tier)
+    error_message = "sku_tier must be Free, Standard, or Premium."
+  }
 }
 
 variable "default_node_count" {
@@ -83,18 +88,33 @@ variable "network_plugin" {
   description = "Network plugin for the AKS cluster (azure or kubenet)"
   type        = string
   default     = "azure"
+
+  validation {
+    condition     = contains(["azure", "kubenet", "none"], var.network_plugin)
+    error_message = "network_plugin must be azure, kubenet, or none."
+  }
 }
 
 variable "network_policy" {
   description = "Network policy for the AKS cluster (azure or calico)"
   type        = string
   default     = "azure"
+
+  validation {
+    condition     = contains(["calico", "azure", "cilium"], var.network_policy)
+    error_message = "network_policy must be calico, azure, or cilium."
+  }
 }
 
 variable "service_cidr" {
   description = "Service CIDR for Kubernetes services"
   type        = string
   default     = "10.0.0.0/16"
+
+  validation {
+    condition     = can(cidrhost(var.service_cidr, 0))
+    error_message = "service_cidr must be a valid CIDR block."
+  }
 }
 
 variable "dns_service_ip" {
@@ -119,6 +139,20 @@ variable "admin_group_object_ids" {
   description = "List of Azure AD group object IDs for cluster admin access"
   type        = list(string)
   default     = []
+}
+
+variable "lock" {
+  description = "Resource lock configuration (CanNotDelete or ReadOnly)"
+  type = object({
+    kind = string
+    name = optional(string, null)
+  })
+  default = null
+
+  validation {
+    condition     = var.lock == null || contains(["CanNotDelete", "ReadOnly"], var.lock.kind)
+    error_message = "lock.kind must be CanNotDelete or ReadOnly."
+  }
 }
 
 variable "tags" {

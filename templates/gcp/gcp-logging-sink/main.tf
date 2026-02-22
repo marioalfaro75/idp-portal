@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -49,7 +51,7 @@ resource "google_storage_bucket" "log_bucket" {
     }
   }
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_bigquery_dataset" "log_dataset" {
@@ -62,7 +64,7 @@ resource "google_bigquery_dataset" "log_dataset" {
   default_table_expiration_ms     = var.bigquery_table_expiration_days != null ? var.bigquery_table_expiration_days * 86400000 : null
   default_partition_expiration_ms = var.bigquery_partition_expiration_days != null ? var.bigquery_partition_expiration_days * 86400000 : null
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_pubsub_topic" "log_topic" {
@@ -71,7 +73,7 @@ resource "google_pubsub_topic" "log_topic" {
 
   message_retention_duration = var.pubsub_message_retention
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_logging_project_sink" "sink" {

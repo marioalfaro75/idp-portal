@@ -35,6 +35,11 @@ variable "target_type" {
   description = "Type of target (instance, ip, or lambda)"
   type        = string
   default     = "ip"
+
+  validation {
+    condition     = contains(["instance", "ip", "lambda"], var.target_type)
+    error_message = "target_type must be instance, ip, or lambda."
+  }
 }
 
 variable "certificate_arn" {

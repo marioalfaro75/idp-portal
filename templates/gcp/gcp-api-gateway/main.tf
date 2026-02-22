@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -17,7 +19,7 @@ resource "google_api_gateway_api" "api" {
   api_id   = var.api_id
   project  = var.project_id
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_api_gateway_api_config" "config" {
@@ -39,7 +41,7 @@ resource "google_api_gateway_api_config" "config" {
     }
   }
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 
   lifecycle {
     create_before_destroy = true
@@ -53,7 +55,7 @@ resource "google_api_gateway_gateway" "gateway" {
   region     = var.region
   project    = var.project_id
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_project_service" "apigateway" {

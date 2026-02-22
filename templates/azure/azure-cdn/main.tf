@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_cdn_profile" "this" {
@@ -22,7 +24,7 @@ resource "azurerm_cdn_profile" "this" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   sku                 = var.cdn_sku
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_cdn_endpoint" "this" {
@@ -36,7 +38,7 @@ resource "azurerm_cdn_endpoint" "this" {
   content_types_to_compress     = var.content_types_to_compress
   querystring_caching_behaviour = var.querystring_caching
   optimization_type             = var.optimization_type
-  tags                          = var.tags
+  tags                          = merge(var.tags, { ManagedBy = "terraform" })
 
   origin {
     name      = var.origin_name

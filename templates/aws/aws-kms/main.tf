@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -95,8 +97,13 @@ resource "aws_kms_key" "main" {
   })
 
   tags = merge(var.tags, {
-    Name = var.alias_name
+    Name      = var.alias_name
+    ManagedBy = "terraform"
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_kms_alias" "main" {

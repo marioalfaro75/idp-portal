@@ -47,3 +47,27 @@ variable "subnet_ids" {
   type        = list(string)
   description = "Subnet IDs for the service"
 }
+
+variable "allowed_security_group_ids" {
+  type        = list(string)
+  description = "Security group IDs allowed to access the ECS service"
+  default     = []
+}
+
+variable "assign_public_ip" {
+  type        = bool
+  description = "Assign public IP to ECS tasks"
+  default     = false
+}
+
+variable "kms_key_id" {
+  type        = string
+  description = "KMS key ID for ECS cluster managed storage encryption"
+  default     = null
+}
+
+variable "tags" {
+  description = "Additional tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

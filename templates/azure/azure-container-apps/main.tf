@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -59,7 +61,7 @@ resource "azurerm_container_app" "this" {
     }
   }
 
-  tags = {
-    environment = var.environment
-  }
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }

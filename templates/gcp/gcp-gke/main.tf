@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -76,7 +78,7 @@ resource "google_container_cluster" "primary" {
     }
   }
 
-  resource_labels = var.labels
+  resource_labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_container_node_pool" "primary" {

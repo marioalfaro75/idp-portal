@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_kubernetes_cluster" "this" {
@@ -24,7 +26,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   dns_prefix          = var.dns_prefix
   kubernetes_version  = var.kubernetes_version
   sku_tier            = var.sku_tier
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   default_node_pool {
     name                = "default"
@@ -36,7 +38,7 @@ resource "azurerm_kubernetes_cluster" "this" {
     min_count            = var.enable_auto_scaling ? var.min_node_count : null
     max_count            = var.enable_auto_scaling ? var.max_node_count : null
     max_pods            = var.max_pods
-    tags                = var.tags
+    tags                = merge(var.tags, { ManagedBy = "terraform" })
   }
 
   identity {
@@ -63,4 +65,11 @@ resource "azurerm_kubernetes_cluster" "this" {
     azure_rbac_enabled     = var.azure_rbac_enabled
     admin_group_object_ids = var.admin_group_object_ids
   }
+}
+
+resource "azurerm_management_lock" "this" {
+  count      = var.lock != null ? 1 : 0
+  name       = coalesce(var.lock.name, "${var.cluster_name}-lock")
+  scope      = azurerm_kubernetes_cluster.this.id
+  lock_level = var.lock.kind
 }

@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -85,7 +87,7 @@ resource "google_sql_database_instance" "postgres" {
       record_client_address   = true
     }
 
-    user_labels = var.labels
+    user_labels = merge(var.labels, { managed_by = "terraform" })
   }
 }
 
@@ -108,7 +110,7 @@ resource "google_secret_manager_secret" "db_password" {
     auto {}
   }
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_secret_manager_secret_version" "db_password" {

@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -48,7 +50,7 @@ resource "google_compute_instance_template" "default" {
 
   tags = var.network_tags
 
-  labels = var.labels
+  labels = merge(var.labels, { managed_by = "terraform" })
 
   lifecycle {
     create_before_destroy = true

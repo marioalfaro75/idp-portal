@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -55,7 +57,8 @@ resource "aws_security_group" "instance" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-instance-sg"
+    Name      = "${var.project_name}-instance-sg"
+    ManagedBy = "terraform"
   })
 }
 
@@ -90,12 +93,14 @@ resource "aws_launch_template" "main" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.tags, {
-      Name = "${var.project_name}-instance"
+      Name      = "${var.project_name}-instance"
+      ManagedBy = "terraform"
     })
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-lt"
+    Name      = "${var.project_name}-lt"
+    ManagedBy = "terraform"
   })
 }
 
@@ -115,7 +120,9 @@ resource "aws_iam_role" "instance" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "ssm" {

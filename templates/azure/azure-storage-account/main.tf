@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_storage_account" "this" {
@@ -28,7 +30,7 @@ resource "azurerm_storage_account" "this" {
   https_traffic_only_enabled      = true
   min_tls_version                 = var.min_tls_version
   allow_nested_items_to_be_public = var.allow_public_access
-  tags                            = var.tags
+  tags                            = merge(var.tags, { ManagedBy = "terraform" })
 
   dynamic "blob_properties" {
     for_each = var.enable_versioning || var.enable_soft_delete ? [1] : []
@@ -76,4 +78,11 @@ resource "azurerm_storage_share" "shares" {
   name                 = each.value.name
   storage_account_name = azurerm_storage_account.this.name
   quota                = each.value.quota_gb
+}
+
+resource "azurerm_management_lock" "this" {
+  count      = var.lock != null ? 1 : 0
+  name       = coalesce(var.lock.name, "${var.storage_account_name}-lock")
+  scope      = azurerm_storage_account.this.id
+  lock_level = var.lock.kind
 }

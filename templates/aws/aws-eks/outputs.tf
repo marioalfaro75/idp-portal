@@ -37,3 +37,18 @@ output "cluster_oidc_issuer_url" {
   description = "OIDC issuer URL for the EKS cluster"
   value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
+
+output "cluster_version" {
+  description = "EKS cluster Kubernetes version"
+  value       = aws_eks_cluster.main.version
+}
+
+output "cluster_platform_version" {
+  description = "EKS cluster platform version"
+  value       = aws_eks_cluster.main.platform_version
+}
+
+output "cluster_status" {
+  description = "EKS cluster status"
+  value       = aws_eks_cluster.main.status
+}

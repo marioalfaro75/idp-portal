@@ -32,3 +32,13 @@ output "api_gateway_id" {
   description = "ID of the API Gateway"
   value       = var.create_api_gateway ? aws_apigatewayv2_api.main[0].id : ""
 }
+
+output "function_version" {
+  description = "Latest published version"
+  value       = aws_lambda_function.main.version
+}
+
+output "qualified_arn" {
+  description = "Qualified ARN with version"
+  value       = aws_lambda_function.main.qualified_arn
+}

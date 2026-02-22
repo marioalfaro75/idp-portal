@@ -39,3 +39,13 @@ output "resource_group_name" {
   description = "The name of the resource group"
   value       = azurerm_resource_group.this.name
 }
+
+output "oidc_issuer_url" {
+  description = "AKS OIDC issuer URL"
+  value       = azurerm_kubernetes_cluster.this.oidc_issuer_url
+}
+
+output "cluster_identity" {
+  description = "AKS cluster managed identity"
+  value       = azurerm_kubernetes_cluster.this.identity
+}

@@ -123,6 +123,20 @@ variable "firewall_rules" {
   default = []
 }
 
+variable "lock" {
+  description = "Resource lock configuration (CanNotDelete or ReadOnly)"
+  type = object({
+    kind = string
+    name = optional(string, null)
+  })
+  default = null
+
+  validation {
+    condition     = var.lock == null || contains(["CanNotDelete", "ReadOnly"], var.lock.kind)
+    error_message = "lock.kind must be CanNotDelete or ReadOnly."
+  }
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

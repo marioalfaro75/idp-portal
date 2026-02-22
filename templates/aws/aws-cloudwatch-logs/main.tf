@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -18,7 +20,8 @@ resource "aws_cloudwatch_log_group" "main" {
   log_group_class   = var.log_group_class
 
   tags = merge(var.tags, {
-    Name = var.log_group_name
+    Name      = var.log_group_name
+    ManagedBy = "terraform"
   })
 }
 
@@ -85,7 +88,9 @@ resource "aws_iam_policy" "log_writer" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_policy" "log_reader" {
@@ -115,5 +120,7 @@ resource "aws_iam_policy" "log_reader" {
     ]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }

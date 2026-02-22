@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -21,7 +23,7 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_key_vault" "this" {
@@ -35,7 +37,7 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled  = var.enable_rbac_authorization
   enabled_for_deployment      = var.enabled_for_deployment
   enabled_for_disk_encryption = var.enabled_for_disk_encryption
-  tags                        = var.tags
+  tags                        = merge(var.tags, { ManagedBy = "terraform" })
 
   dynamic "network_acls" {
     for_each = var.enable_network_acls ? [1] : []
@@ -85,4 +87,11 @@ resource "azurerm_key_vault_secret" "secrets" {
   name         = each.key
   value        = each.value
   key_vault_id = azurerm_key_vault.this.id
+}
+
+resource "azurerm_management_lock" "this" {
+  count      = var.lock != null ? 1 : 0
+  name       = coalesce(var.lock.name, "${var.key_vault_name}-lock")
+  scope      = azurerm_key_vault.this.id
+  lock_level = var.lock.kind
 }

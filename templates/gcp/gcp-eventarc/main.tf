@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
+      version = "~> 5.0"
     }
   }
 }
@@ -45,9 +48,9 @@ resource "google_eventarc_trigger" "this" {
 
   service_account = google_service_account.eventarc.email
 
-  labels = {
-    environment = var.environment
-  }
+  labels = merge(var.labels, {
+    managed_by = "terraform"
+  })
 
   depends_on = [google_project_service.eventarc, google_project_iam_member.invoker]
 }

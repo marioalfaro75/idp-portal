@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,6 +16,10 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
+
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "azurerm_container_group" "this" {
@@ -36,7 +42,7 @@ resource "azurerm_container_group" "this" {
     }
   }
 
-  tags = {
-    environment = var.environment
-  }
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }

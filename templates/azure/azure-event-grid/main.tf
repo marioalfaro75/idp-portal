@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,6 +16,10 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
+
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "azurerm_eventgrid_topic" "this" {
@@ -23,9 +29,9 @@ resource "azurerm_eventgrid_topic" "this" {
 
   input_schema = var.input_schema
 
-  tags = {
-    environment = var.environment
-  }
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "azurerm_eventgrid_event_subscription" "webhook" {

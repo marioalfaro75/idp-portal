@@ -26,8 +26,8 @@ variable "admin_enabled" {
   default     = false
 }
 
-variable "environment" {
-  type        = string
-  description = "Environment name"
-  default     = "dev"
+variable "tags" {
+  description = "Additional tags to apply to all resources"
+  type        = map(string)
+  default     = {}
 }

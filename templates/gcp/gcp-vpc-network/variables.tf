@@ -61,3 +61,9 @@ variable "create_nat_gateway" {
   type        = bool
   default     = true
 }
+
+variable "labels" {
+  description = "Labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

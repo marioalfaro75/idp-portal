@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -16,7 +18,8 @@ resource "aws_sns_topic" "alarm_notifications" {
   name  = "${var.project_name}-alarm-notifications"
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-alarm-notifications"
+    Name      = "${var.project_name}-alarm-notifications"
+    ManagedBy = "terraform"
   })
 }
 
@@ -50,7 +53,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   ok_actions    = local.alarm_actions
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-cpu-utilization-high"
+    Name      = "${var.project_name}-cpu-utilization-high"
+    ManagedBy = "terraform"
   })
 }
 
@@ -73,7 +77,8 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
   ok_actions    = local.alarm_actions
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-memory-utilization-high"
+    Name      = "${var.project_name}-memory-utilization-high"
+    ManagedBy = "terraform"
   })
 }
 
@@ -96,7 +101,8 @@ resource "aws_cloudwatch_metric_alarm" "error_rate" {
   ok_actions    = local.alarm_actions
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-error-rate-high"
+    Name      = "${var.project_name}-error-rate-high"
+    ManagedBy = "terraform"
   })
 }
 
@@ -119,7 +125,8 @@ resource "aws_cloudwatch_metric_alarm" "latency_high" {
   ok_actions    = local.alarm_actions
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-latency-high"
+    Name      = "${var.project_name}-latency-high"
+    ManagedBy = "terraform"
   })
 }
 
@@ -143,6 +150,7 @@ resource "aws_cloudwatch_metric_alarm" "custom" {
   ok_actions    = local.alarm_actions
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-${each.value.name}"
+    Name      = "${var.project_name}-${each.value.name}"
+    ManagedBy = "terraform"
   })
 }

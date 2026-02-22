@@ -39,7 +39,13 @@ variable "endpoint_private_access" {
 variable "endpoint_public_access" {
   description = "Enable public API server endpoint"
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "public_access_cidrs" {
+  description = "CIDR blocks allowed for public API server endpoint access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
 variable "enabled_log_types" {
@@ -58,6 +64,11 @@ variable "capacity_type" {
   description = "Capacity type for the node group (ON_DEMAND or SPOT)"
   type        = string
   default     = "ON_DEMAND"
+
+  validation {
+    condition     = contains(["ON_DEMAND", "SPOT"], var.capacity_type)
+    error_message = "capacity_type must be ON_DEMAND or SPOT."
+  }
 }
 
 variable "node_disk_size" {

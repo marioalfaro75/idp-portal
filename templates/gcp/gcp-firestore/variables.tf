@@ -92,3 +92,9 @@ variable "weekly_backup_day" {
   type        = string
   default     = "SUNDAY"
 }
+
+variable "labels" {
+  description = "Labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

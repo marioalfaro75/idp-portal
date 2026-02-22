@@ -21,8 +21,14 @@ variable "email_endpoint" {
   default     = ""
 }
 
-variable "environment" {
+variable "kms_master_key_id" {
   type        = string
-  description = "Environment name"
-  default     = "dev"
+  description = "KMS key ID for SNS topic encryption (uses alias/aws/sns if not set)"
+  default     = null
+}
+
+variable "tags" {
+  description = "Additional tags to apply to all resources"
+  type        = map(string)
+  default     = {}
 }

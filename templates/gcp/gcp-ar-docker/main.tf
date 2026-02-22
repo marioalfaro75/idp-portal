@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
+      version = "~> 5.0"
     }
   }
 }
@@ -34,9 +37,9 @@ resource "google_artifact_registry_repository" "docker" {
     }
   }
 
-  labels = {
-    environment = var.environment
-  }
+  labels = merge(var.labels, {
+    managed_by = "terraform"
+  })
 
   depends_on = [google_project_service.artifactregistry]
 }

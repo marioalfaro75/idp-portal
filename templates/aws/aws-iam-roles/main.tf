@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -36,7 +38,8 @@ resource "aws_iam_role" "main" {
   permissions_boundary = var.permissions_boundary_arn
 
   tags = merge(var.tags, {
-    Name = var.role_name
+    Name      = var.role_name
+    ManagedBy = "terraform"
   })
 }
 
@@ -51,7 +54,9 @@ resource "aws_iam_policy" "custom" {
     Statement = var.custom_policies[count.index].statements
   })
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "custom" {
@@ -71,5 +76,7 @@ resource "aws_iam_instance_profile" "main" {
   name  = "${var.role_name}-instance-profile"
   role  = aws_iam_role.main.name
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    ManagedBy = "terraform"
+  })
 }

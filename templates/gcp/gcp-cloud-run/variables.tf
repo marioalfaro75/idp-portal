@@ -54,3 +54,9 @@ variable "allow_unauthenticated" {
   description = "Allow unauthenticated access"
   default     = false
 }
+
+variable "labels" {
+  description = "Labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

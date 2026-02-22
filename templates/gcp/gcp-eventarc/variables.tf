@@ -30,3 +30,9 @@ variable "environment" {
   description = "Environment name"
   default     = "dev"
 }
+
+variable "labels" {
+  description = "Labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

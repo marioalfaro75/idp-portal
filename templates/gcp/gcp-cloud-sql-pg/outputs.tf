@@ -43,3 +43,8 @@ output "server_ca_cert" {
   value       = google_sql_database_instance.postgres.server_ca_cert[0].cert
   sensitive   = true
 }
+
+output "connection_name" {
+  description = "Cloud SQL connection name"
+  value       = google_sql_database_instance.postgres.connection_name
+}

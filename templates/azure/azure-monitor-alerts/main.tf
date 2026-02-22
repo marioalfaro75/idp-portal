@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_monitor_action_group" "this" {
@@ -22,7 +24,7 @@ resource "azurerm_monitor_action_group" "this" {
   resource_group_name = azurerm_resource_group.this.name
   short_name          = var.action_group_short_name
   enabled             = true
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   dynamic "email_receiver" {
     for_each = var.email_receivers
@@ -55,7 +57,7 @@ resource "azurerm_monitor_metric_alert" "this" {
   window_size         = each.value.window_size
   enabled             = each.value.enabled
   auto_mitigate       = each.value.auto_mitigate
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   criteria {
     metric_namespace = each.value.metric_namespace
@@ -78,7 +80,7 @@ resource "azurerm_monitor_activity_log_alert" "this" {
   scopes              = each.value.scopes
   description         = each.value.description
   enabled             = each.value.enabled
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   criteria {
     category       = each.value.category

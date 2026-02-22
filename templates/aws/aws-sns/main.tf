@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 }
@@ -11,13 +14,14 @@ provider "aws" {
 }
 
 resource "aws_sns_topic" "this" {
-  name         = var.topic_name
-  display_name = var.display_name
+  name              = var.topic_name
+  display_name      = var.display_name
+  kms_master_key_id = var.kms_master_key_id
 
-  tags = {
+  tags = merge(var.tags, {
     Name        = var.topic_name
-    Environment = var.environment
-  }
+    ManagedBy   = "terraform"
+  })
 }
 
 resource "aws_sns_topic_subscription" "email" {

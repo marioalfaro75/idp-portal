@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -30,10 +32,10 @@ resource "google_kms_crypto_key" "keys" {
     protection_level = lookup(each.value, "protection_level", var.default_protection_level)
   }
 
-  labels = merge(var.labels, lookup(each.value, "labels", {}))
+  labels = merge(var.labels, lookup(each.value, "labels", {}), { managed_by = "terraform" })
 
   lifecycle {
-    prevent_destroy = false
+    prevent_destroy = true
   }
 }
 

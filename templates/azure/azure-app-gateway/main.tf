@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_public_ip" "this" {
@@ -23,14 +25,14 @@ resource "azurerm_public_ip" "this" {
   resource_group_name = azurerm_resource_group.this.name
   allocation_method   = "Static"
   sku                 = "Standard"
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_application_gateway" "this" {
   name                = var.app_gateway_name
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   sku {
     name     = var.sku_name

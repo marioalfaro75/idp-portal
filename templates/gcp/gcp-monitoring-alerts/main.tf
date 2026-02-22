@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -67,7 +69,7 @@ resource "google_monitoring_alert_policy" "cpu_utilization" {
     auto_close = var.auto_close_duration
   }
 
-  user_labels = var.labels
+  user_labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_monitoring_alert_policy" "memory_utilization" {
@@ -101,7 +103,7 @@ resource "google_monitoring_alert_policy" "memory_utilization" {
     auto_close = var.auto_close_duration
   }
 
-  user_labels = var.labels
+  user_labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_monitoring_alert_policy" "disk_utilization" {
@@ -135,7 +137,7 @@ resource "google_monitoring_alert_policy" "disk_utilization" {
     auto_close = var.auto_close_duration
   }
 
-  user_labels = var.labels
+  user_labels = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_monitoring_alert_policy" "uptime_check" {
@@ -166,7 +168,7 @@ resource "google_monitoring_alert_policy" "uptime_check" {
   }
 
   notification_channels = local.notification_channels
-  user_labels           = var.labels
+  user_labels           = merge(var.labels, { managed_by = "terraform" })
 }
 
 resource "google_monitoring_uptime_check_config" "https" {

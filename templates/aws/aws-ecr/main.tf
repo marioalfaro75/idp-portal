@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 }
@@ -19,13 +22,14 @@ resource "aws_ecr_repository" "this" {
   }
 
   encryption_configuration {
-    encryption_type = "AES256"
+    encryption_type = var.kms_key_arn != null ? "KMS" : "AES256"
+    kms_key         = var.kms_key_arn
   }
 
-  tags = {
+  tags = merge(var.tags, {
     Name        = var.repository_name
-    Environment = var.environment
-  }
+    ManagedBy   = "terraform"
+  })
 }
 
 resource "aws_ecr_lifecycle_policy" "this" {

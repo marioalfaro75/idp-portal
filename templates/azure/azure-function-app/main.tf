@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -14,7 +16,7 @@ provider "azurerm" {
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
   location = var.location
-  tags     = var.tags
+  tags     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_storage_account" "this" {
@@ -23,7 +25,7 @@ resource "azurerm_storage_account" "this" {
   location                 = azurerm_resource_group.this.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  tags                     = var.tags
+  tags                     = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_service_plan" "this" {
@@ -32,7 +34,7 @@ resource "azurerm_service_plan" "this" {
   resource_group_name = azurerm_resource_group.this.name
   os_type             = var.os_type
   sku_name            = var.sku_name
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_application_insights" "this" {
@@ -41,7 +43,7 @@ resource "azurerm_application_insights" "this" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   application_type    = "web"
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 }
 
 resource "azurerm_linux_function_app" "this" {
@@ -50,7 +52,7 @@ resource "azurerm_linux_function_app" "this" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   service_plan_id     = azurerm_service_plan.this.id
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   storage_account_name       = azurerm_storage_account.this.name
   storage_account_access_key = azurerm_storage_account.this.primary_access_key
@@ -86,7 +88,7 @@ resource "azurerm_windows_function_app" "this" {
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   service_plan_id     = azurerm_service_plan.this.id
-  tags                = var.tags
+  tags                = merge(var.tags, { ManagedBy = "terraform" })
 
   storage_account_name       = azurerm_storage_account.this.name
   storage_account_access_key = azurerm_storage_account.this.primary_access_key

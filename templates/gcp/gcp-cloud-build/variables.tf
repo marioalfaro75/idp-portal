@@ -41,3 +41,9 @@ variable "cloudbuild_yaml" {
   description = "Path to cloudbuild.yaml"
   default     = "cloudbuild.yaml"
 }
+
+variable "labels" {
+  description = "Labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

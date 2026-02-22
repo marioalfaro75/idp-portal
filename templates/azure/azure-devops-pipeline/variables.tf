@@ -87,3 +87,9 @@ variable "enable_build_validation" {
   type        = bool
   default     = false
 }
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

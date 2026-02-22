@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
+      version = "~> 5.0"
     }
   }
 }
@@ -19,6 +22,10 @@ resource "google_project_service" "run" {
 resource "google_cloud_run_v2_service" "this" {
   name     = var.service_name
   location = var.region
+
+  labels = merge(var.labels, {
+    managed_by = "terraform"
+  })
 
   template {
     containers {

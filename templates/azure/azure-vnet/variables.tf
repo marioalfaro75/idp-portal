@@ -18,6 +18,11 @@ variable "address_space" {
   description = "Address space for the virtual network"
   type        = list(string)
   default     = ["10.0.0.0/16"]
+
+  validation {
+    condition     = alltrue([for cidr in var.address_space : can(cidrhost(cidr, 0))])
+    error_message = "All address_space entries must be valid CIDR blocks."
+  }
 }
 
 variable "dns_servers" {
