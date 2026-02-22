@@ -7,8 +7,20 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS } from '@idp/shared';
-import { ArrowLeft, Trash2, RotateCcw, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Trash2, RotateCcw, ExternalLink, AlertTriangle, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+function extractErrorSummary(errorMessage: string): { summary: string; hasDetails: boolean } {
+  const lines = errorMessage.split('\n').filter((l) => l.trim());
+  if (lines.length === 0) return { summary: errorMessage, hasDetails: false };
+  // Look for first Terraform Error: line
+  for (const line of lines) {
+    const match = line.match(/[│|]?\s*Error:\s*(.+)/);
+    if (match) return { summary: match[0].trim(), hasDetails: lines.length > 1 };
+  }
+  // Fall back to first non-empty line
+  return { summary: lines[0], hasDetails: lines.length > 1 };
+}
 
 const statusVariant = (status: string) => {
   switch (status) {
@@ -166,22 +178,51 @@ export function DeploymentDetailPage() {
         )}
       </div>
 
-      {deployment.errorMessage && (
-        <Card title="Error">
-          <pre className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">{deployment.errorMessage}</pre>
-        </Card>
-      )}
+      {deployment.errorMessage && (() => {
+        const { summary, hasDetails } = extractErrorSummary(deployment.errorMessage);
+        return (
+          <Card title="Error">
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">{summary}</p>
+                  {deployment.executionMethod === 'github' && deployment.githubRunUrl && (
+                    <a href={deployment.githubRunUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-red-600 dark:text-red-400 hover:underline inline-flex items-center gap-1 mt-2">
+                      View on GitHub <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+              {hasDetails && (
+                <details className="mt-3">
+                  <summary className="text-sm text-red-600 dark:text-red-400 cursor-pointer hover:underline inline-flex items-center gap-1">
+                    <ChevronDown className="w-3 h-3" /> Full error details
+                  </summary>
+                  <pre className="mt-2 text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap bg-red-100 dark:bg-red-900/30 p-3 rounded max-h-64 overflow-y-auto">{deployment.errorMessage}</pre>
+                </details>
+              )}
+            </div>
+          </Card>
+        );
+      })()}
 
-      {(deployment.planOutput || deployment.applyOutput || deployment.destroyOutput || logs.length > 0) && (
-        <Card title="Logs">
-          <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
-            {deployment.planOutput && `--- PLAN ---\n${deployment.planOutput}\n\n`}
-            {deployment.applyOutput && `--- APPLY ---\n${deployment.applyOutput}\n\n`}
-            {deployment.destroyOutput && `--- ${['rolling_back', 'rolled_back'].includes(deployment.status) ? 'ROLLBACK' : 'DESTROY'} ---\n${deployment.destroyOutput}\n\n`}
-            {logs.length > 0 && `--- LIVE ---\n${logs.join('\n')}`}
-          </pre>
-        </Card>
-      )}
+      {(deployment.planOutput || deployment.applyOutput || deployment.destroyOutput || logs.length > 0) && (() => {
+        const isGitHub = deployment.executionMethod === 'github';
+        const planLabel = isGitHub ? '--- SETUP ---' : '--- PLAN ---';
+        const applyLabel = isGitHub ? '--- WORKFLOW RUN ---' : '--- APPLY ---';
+        const logTitle = isGitHub ? 'GitHub Actions Logs' : 'Logs';
+        return (
+          <Card title={logTitle}>
+            <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
+              {deployment.planOutput && `${planLabel}\n${deployment.planOutput}\n\n`}
+              {deployment.applyOutput && `${applyLabel}\n${deployment.applyOutput}\n\n`}
+              {deployment.destroyOutput && `--- ${['rolling_back', 'rolled_back'].includes(deployment.status) ? 'ROLLBACK' : 'DESTROY'} ---\n${deployment.destroyOutput}\n\n`}
+              {logs.length > 0 && `--- LIVE ---\n${logs.join('\n')}`}
+            </pre>
+          </Card>
+        );
+      })()}
 
       {Object.keys(deployment.variables).length > 0 && (
         <Card title="Variables">

@@ -47,7 +47,7 @@ export interface CreateDeploymentRequest {
 }
 
 export interface DeploymentLogEvent {
-  type: 'log' | 'status' | 'error' | 'complete';
+  type: 'log' | 'status' | 'error' | 'warning' | 'complete';
   message: string;
   timestamp: string;
 }

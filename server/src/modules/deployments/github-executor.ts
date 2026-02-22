@@ -25,6 +25,101 @@ function parseRepo(repo: string): { owner: string; repo: string } {
   return { owner, repo: name };
 }
 
+const MAX_LOG_SIZE = 500 * 1024; // 500KB max to avoid SQLite bloat
+
+function extractErrorSummary(logText: string): string | null {
+  const lines = logText.split('\n');
+  for (const line of lines) {
+    // Terraform Error: lines (including box-drawing variants like "│ Error:")
+    const tfMatch = line.match(/[│|]?\s*Error:\s*(.+)/);
+    if (tfMatch) return tfMatch[0].trim();
+    // Cloud auth errors
+    if (/AccessDenied|AuthorizationError|AuthenticationError|InvalidClientTokenId|UnauthorizedAccess/i.test(line)) {
+      return line.trim();
+    }
+  }
+  return null;
+}
+
+async function fetchRunLogs(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  runId: number,
+): Promise<{ logs: string; failedStep: string | null; failedJob: string | null; summary: string | null }> {
+  try {
+    const { data: jobsData } = await octokit.actions.listJobsForWorkflowRun({
+      owner,
+      repo,
+      run_id: runId,
+    });
+
+    let allLogs = '';
+    let failedStep: string | null = null;
+    let failedJob: string | null = null;
+
+    for (const job of jobsData.jobs) {
+      // Build structured header per job with step pass/fail
+      const stepLines = (job.steps || []).map((step) => {
+        const icon = step.conclusion === 'success' ? '✓' : step.conclusion === 'failure' ? '✗' : '○';
+        const duration = step.started_at && step.completed_at
+          ? `${Math.round((new Date(step.completed_at).getTime() - new Date(step.started_at).getTime()) / 1000)}s`
+          : '';
+        if (step.conclusion === 'failure' && !failedStep) {
+          failedStep = step.name;
+          failedJob = job.name;
+        }
+        return `  ${icon} ${step.name}${duration ? ` (${duration})` : ''}`;
+      });
+
+      allLogs += `=== Job: ${job.name} (${job.conclusion || job.status}) ===\n`;
+      allLogs += stepLines.join('\n') + '\n\n';
+
+      // Fetch per-job text logs
+      try {
+        const { data: jobLog } = await octokit.actions.downloadJobLogsForWorkflowRun({
+          owner,
+          repo,
+          job_id: job.id,
+        });
+        allLogs += (typeof jobLog === 'string' ? jobLog : String(jobLog)) + '\n\n';
+      } catch {
+        allLogs += '(logs unavailable for this job)\n\n';
+      }
+    }
+
+    // Truncate if too large
+    if (allLogs.length > MAX_LOG_SIZE) {
+      allLogs = allLogs.slice(0, MAX_LOG_SIZE) + '\n\n--- logs truncated (>500KB) ---\n';
+    }
+
+    // Build summary
+    let summary: string | null = null;
+    if (failedJob) {
+      const errorLine = extractErrorSummary(allLogs);
+      summary = errorLine || `Job "${failedJob}", step "${failedStep}" failed`;
+    }
+
+    return { logs: allLogs, failedStep, failedJob, summary };
+  } catch (err) {
+    logger.warn('Failed to fetch GitHub Actions logs (best-effort)', { error: (err as Error).message });
+    return { logs: '', failedStep: null, failedJob: null, summary: null };
+  }
+}
+
+function createLogCollector(deploymentId: string): { messages: string[]; attach: () => void; detach: () => void } {
+  const emitter = getLogEmitter(deploymentId);
+  const messages: string[] = [];
+  const handler = (event: { type: string; message: string }) => {
+    messages.push(`[${event.type}] ${event.message}`);
+  };
+  return {
+    messages,
+    attach: () => emitter.on('log', handler),
+    detach: () => emitter.off('log', handler),
+  };
+}
+
 async function pushTemplateFiles(
   deploymentId: string,
   userId: string,
@@ -227,62 +322,76 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   });
   if (!deployment) throw new Error('Deployment not found');
 
-  const octokit = await getOctokit(userId);
-  const { owner, repo } = parseRepo(deployment.githubRepo!);
-  const workflowId = deployment.githubWorkflowId!;
-  const ref = deployment.githubRef || 'main';
-  const variables = JSON.parse(deployment.variables);
-  const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
-
-  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
-  const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
-  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
-
-  const dispatchedAt = new Date();
+  const collector = createLogCollector(deploymentId);
+  collector.attach();
 
   try {
-    await octokit.actions.createWorkflowDispatch({
-      owner,
-      repo,
-      workflow_id: workflowId,
-      ref,
-      inputs: {
-        template_slug: deployment.template.slug,
-        template_provider: deployment.template.provider,
-        variables: JSON.stringify(variables),
-        deployment_id: deployment.id,
-        deployment_name: deployment.name,
-        action: 'apply',
-      },
-    });
-  } catch (err: any) {
-    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
-      throw new Error(
-        'GitHub token lacks permission to dispatch workflows. ' +
-        'For classic PATs, enable the "repo" scope. ' +
-        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
-      );
-    }
-    throw err;
-  }
+    const octokit = await getOctokit(userId);
+    const { owner, repo } = parseRepo(deployment.githubRepo!);
+    const workflowId = deployment.githubWorkflowId!;
+    const ref = deployment.githubRef || 'main';
+    const variables = JSON.parse(deployment.variables);
+    const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-  await prisma.deployment.update({
-    where: { id: deploymentId },
-    data: { status: 'dispatched' },
-  });
+    await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
+    const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+    await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
-  const emitter = getLogEmitter(deploymentId);
-  emitter.emit('log', { type: 'status', message: 'Workflow dispatched to GitHub Actions' });
+    const dispatchedAt = new Date();
 
-  // Poll for the run ID after a delay
-  setTimeout(async () => {
     try {
-      await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
-    } catch (err) {
-      logger.error(`Failed to find GitHub run for deployment ${deploymentId}`, { error: (err as Error).message });
+      await octokit.actions.createWorkflowDispatch({
+        owner,
+        repo,
+        workflow_id: workflowId,
+        ref,
+        inputs: {
+          template_slug: deployment.template.slug,
+          template_provider: deployment.template.provider,
+          variables: JSON.stringify(variables),
+          deployment_id: deployment.id,
+          deployment_name: deployment.name,
+          action: 'apply',
+        },
+      });
+    } catch (err: any) {
+      if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+        throw new Error(
+          'GitHub token lacks permission to dispatch workflows. ' +
+          'For classic PATs, enable the "repo" scope. ' +
+          'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+          'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+        );
+      }
+      throw err;
     }
-  }, 5000);
+
+    await prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { status: 'dispatched', planOutput: collector.messages.join('\n') || null },
+    });
+
+    const emitter = getLogEmitter(deploymentId);
+    emitter.emit('log', { type: 'status', message: 'Workflow dispatched to GitHub Actions' });
+
+    // Poll for the run ID after a delay
+    setTimeout(async () => {
+      try {
+        await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+      } catch (err) {
+        logger.error(`Failed to find GitHub run for deployment ${deploymentId}`, { error: (err as Error).message });
+      }
+    }, 5000);
+  } finally {
+    collector.detach();
+    // Persist collected logs even on failure
+    try {
+      await prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { planOutput: collector.messages.join('\n') || null },
+      });
+    } catch { /* best-effort */ }
+  }
 }
 
 export async function dispatchDestroy(deploymentId: string, userId: string): Promise<void> {
@@ -292,61 +401,74 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   });
   if (!deployment) throw new Error('Deployment not found');
 
-  const octokit = await getOctokit(userId);
-  const { owner, repo } = parseRepo(deployment.githubRepo!);
-  const workflowId = deployment.githubWorkflowId!;
-  const ref = deployment.githubRef || 'main';
-  const variables = JSON.parse(deployment.variables);
-  const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
-
-  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
-  const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
-  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
-
-  const dispatchedAt = new Date();
+  const collector = createLogCollector(deploymentId);
+  collector.attach();
 
   try {
-    await octokit.actions.createWorkflowDispatch({
-      owner,
-      repo,
-      workflow_id: workflowId,
-      ref,
-      inputs: {
-        template_slug: deployment.template.slug,
-        template_provider: deployment.template.provider,
-        variables: JSON.stringify(variables),
-        deployment_id: deployment.id,
-        deployment_name: deployment.name,
-        action: 'destroy',
-      },
-    });
-  } catch (err: any) {
-    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
-      throw new Error(
-        'GitHub token lacks permission to dispatch workflows. ' +
-        'For classic PATs, enable the "repo" scope. ' +
-        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
-      );
-    }
-    throw err;
-  }
+    const octokit = await getOctokit(userId);
+    const { owner, repo } = parseRepo(deployment.githubRepo!);
+    const workflowId = deployment.githubWorkflowId!;
+    const ref = deployment.githubRef || 'main';
+    const variables = JSON.parse(deployment.variables);
+    const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-  await prisma.deployment.update({
-    where: { id: deploymentId },
-    data: { status: 'destroying' },
-  });
+    await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
+    const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+    await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
-  const emitter = getLogEmitter(deploymentId);
-  emitter.emit('log', { type: 'status', message: 'Destroy workflow dispatched to GitHub Actions' });
+    const dispatchedAt = new Date();
 
-  setTimeout(async () => {
     try {
-      await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
-    } catch (err) {
-      logger.error(`Failed to find GitHub run for destroy ${deploymentId}`, { error: (err as Error).message });
+      await octokit.actions.createWorkflowDispatch({
+        owner,
+        repo,
+        workflow_id: workflowId,
+        ref,
+        inputs: {
+          template_slug: deployment.template.slug,
+          template_provider: deployment.template.provider,
+          variables: JSON.stringify(variables),
+          deployment_id: deployment.id,
+          deployment_name: deployment.name,
+          action: 'destroy',
+        },
+      });
+    } catch (err: any) {
+      if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+        throw new Error(
+          'GitHub token lacks permission to dispatch workflows. ' +
+          'For classic PATs, enable the "repo" scope. ' +
+          'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+          'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+        );
+      }
+      throw err;
     }
-  }, 5000);
+
+    await prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { status: 'destroying', planOutput: collector.messages.join('\n') || null },
+    });
+
+    const emitter = getLogEmitter(deploymentId);
+    emitter.emit('log', { type: 'status', message: 'Destroy workflow dispatched to GitHub Actions' });
+
+    setTimeout(async () => {
+      try {
+        await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+      } catch (err) {
+        logger.error(`Failed to find GitHub run for destroy ${deploymentId}`, { error: (err as Error).message });
+      }
+    }, 5000);
+  } finally {
+    collector.detach();
+    try {
+      await prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { planOutput: collector.messages.join('\n') || null },
+      });
+    } catch { /* best-effort */ }
+  }
 }
 
 export async function dispatchRollback(deploymentId: string, userId: string): Promise<void> {
@@ -356,61 +478,74 @@ export async function dispatchRollback(deploymentId: string, userId: string): Pr
   });
   if (!deployment) throw new Error('Deployment not found');
 
-  const octokit = await getOctokit(userId);
-  const { owner, repo } = parseRepo(deployment.githubRepo!);
-  const workflowId = deployment.githubWorkflowId!;
-  const ref = deployment.githubRef || 'main';
-  const variables = JSON.parse(deployment.variables);
-  const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
-
-  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
-  const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
-  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
-
-  const dispatchedAt = new Date();
+  const collector = createLogCollector(deploymentId);
+  collector.attach();
 
   try {
-    await octokit.actions.createWorkflowDispatch({
-      owner,
-      repo,
-      workflow_id: workflowId,
-      ref,
-      inputs: {
-        template_slug: deployment.template.slug,
-        template_provider: deployment.template.provider,
-        variables: JSON.stringify(variables),
-        deployment_id: deployment.id,
-        deployment_name: deployment.name,
-        action: 'destroy',
-      },
-    });
-  } catch (err: any) {
-    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
-      throw new Error(
-        'GitHub token lacks permission to dispatch workflows. ' +
-        'For classic PATs, enable the "repo" scope. ' +
-        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
-      );
-    }
-    throw err;
-  }
+    const octokit = await getOctokit(userId);
+    const { owner, repo } = parseRepo(deployment.githubRepo!);
+    const workflowId = deployment.githubWorkflowId!;
+    const ref = deployment.githubRef || 'main';
+    const variables = JSON.parse(deployment.variables);
+    const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-  await prisma.deployment.update({
-    where: { id: deploymentId },
-    data: { status: 'rolling_back' },
-  });
+    await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
+    const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+    await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
 
-  const emitter = getLogEmitter(deploymentId);
-  emitter.emit('log', { type: 'status', message: 'Rollback workflow dispatched to GitHub Actions' });
+    const dispatchedAt = new Date();
 
-  setTimeout(async () => {
     try {
-      await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
-    } catch (err) {
-      logger.error(`Failed to find GitHub run for rollback ${deploymentId}`, { error: (err as Error).message });
+      await octokit.actions.createWorkflowDispatch({
+        owner,
+        repo,
+        workflow_id: workflowId,
+        ref,
+        inputs: {
+          template_slug: deployment.template.slug,
+          template_provider: deployment.template.provider,
+          variables: JSON.stringify(variables),
+          deployment_id: deployment.id,
+          deployment_name: deployment.name,
+          action: 'destroy',
+        },
+      });
+    } catch (err: any) {
+      if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+        throw new Error(
+          'GitHub token lacks permission to dispatch workflows. ' +
+          'For classic PATs, enable the "repo" scope. ' +
+          'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+          'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+        );
+      }
+      throw err;
     }
-  }, 5000);
+
+    await prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { status: 'rolling_back', planOutput: collector.messages.join('\n') || null },
+    });
+
+    const emitter = getLogEmitter(deploymentId);
+    emitter.emit('log', { type: 'status', message: 'Rollback workflow dispatched to GitHub Actions' });
+
+    setTimeout(async () => {
+      try {
+        await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+      } catch (err) {
+        logger.error(`Failed to find GitHub run for rollback ${deploymentId}`, { error: (err as Error).message });
+      }
+    }, 5000);
+  } finally {
+    collector.detach();
+    try {
+      await prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { planOutput: collector.messages.join('\n') || null },
+      });
+    } catch { /* best-effort */ }
+  }
 }
 
 async function findAndStoreRunId(
@@ -454,6 +589,16 @@ async function findAndStoreRunId(
   }
 
   logger.warn(`Could not find GitHub run for deployment ${deploymentId} after retries`);
+  await prisma.deployment.update({
+    where: { id: deploymentId },
+    data: {
+      errorMessage:
+        'Could not find the GitHub Actions workflow run after multiple attempts. ' +
+        'Possible causes: workflow file syntax error, branch protection rules blocking the run, ' +
+        'GitHub processing delays, or the workflow_dispatch trigger is missing. ' +
+        'Check the Actions tab in your repository for details.',
+    },
+  });
 }
 
 export async function pollGitHubDeployments(): Promise<void> {
@@ -510,13 +655,31 @@ export async function pollGitHubDeployments(): Promise<void> {
           // queued/waiting/pending → keep current status
 
           if (newStatus && newStatus !== deployment.status) {
+            // Fetch logs when run completes (success or failure)
+            let logData: { logs: string; summary: string | null } = { logs: '', summary: null };
+            if (run.status === 'completed') {
+              logData = await fetchRunLogs(octokit, owner, repo, Number(deployment.githubRunId));
+            }
+
+            const outputField = (isDestroying || isRollingBack) ? 'destroyOutput' : 'applyOutput';
+            const updateData: Record<string, unknown> = {
+              status: newStatus,
+              githubRunUrl: run.html_url,
+            };
+
+            if (run.status === 'completed' && logData.logs) {
+              updateData[outputField] = logData.logs;
+            }
+
+            if (newStatus === 'failed') {
+              updateData.errorMessage = logData.summary || `GitHub Actions run ${run.conclusion}: ${run.html_url}`;
+            } else {
+              updateData.errorMessage = null;
+            }
+
             await prisma.deployment.update({
               where: { id: deployment.id },
-              data: {
-                status: newStatus,
-                githubRunUrl: run.html_url,
-                errorMessage: newStatus === 'failed' ? `GitHub Actions run ${run.conclusion}: ${run.html_url}` : null,
-              },
+              data: updateData,
             });
 
             const emitter = getLogEmitter(deployment.id);
@@ -532,6 +695,33 @@ export async function pollGitHubDeployments(): Promise<void> {
           logger.error(`Failed to poll GitHub run for deployment ${deployment.id}`, { error: (err as Error).message });
         }
       }
+    }
+    // Fail deployments stuck in 'dispatched' with no run ID for >10 minutes
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const staleDeployments = await prisma.deployment.findMany({
+      where: {
+        executionMethod: 'github',
+        status: 'dispatched',
+        githubRunId: null,
+        updatedAt: { lt: tenMinutesAgo },
+      },
+    });
+
+    for (const stale of staleDeployments) {
+      await prisma.deployment.update({
+        where: { id: stale.id },
+        data: {
+          status: 'failed',
+          errorMessage:
+            'Deployment timed out: no GitHub Actions workflow run was detected within 10 minutes of dispatch. ' +
+            'Possible causes: workflow file not found or has syntax errors, the dispatch event was not received by GitHub, ' +
+            'or branch protection rules prevented the run. Check the Actions tab in your repository.',
+        },
+      });
+      const emitter = getLogEmitter(stale.id);
+      emitter.emit('log', { type: 'error', message: 'Deployment timed out waiting for GitHub Actions run' });
+      emitter.emit('log', { type: 'complete', message: 'failed' });
+      logger.warn(`Stale deployment ${stale.id} failed after 10 minute timeout`);
     }
   } catch (err) {
     logger.error('GitHub deployment polling failed', { error: (err as Error).message });
