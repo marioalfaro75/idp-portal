@@ -11,10 +11,34 @@ import { Select } from '../../components/ui/Select';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS, CLOUD_PROVIDERS } from '@idp/shared';
 import type { CloudConnection } from '@idp/shared';
-import { Plus, Trash2, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Cloud, Layers, Rocket } from 'lucide-react';
+import { timeAgo } from '../../utils/time';
 import toast from 'react-hot-toast';
 
 const statusVariant = (s: string) => s === 'connected' ? 'success' as const : s === 'error' ? 'danger' as const : 'warning' as const;
+
+const providerLabels: Record<string, string> = {
+  aws: 'Amazon Web Services',
+  gcp: 'Google Cloud Platform',
+  azure: 'Microsoft Azure',
+};
+
+const providerDotColors: Record<string, string> = {
+  aws: 'bg-amber-500',
+  gcp: 'bg-blue-500',
+  azure: 'bg-sky-600',
+};
+
+function metadataSubtitle(c: CloudConnection): string | null {
+  const m = c.metadata;
+  if (!m) return null;
+  const parts: string[] = [];
+  if (m.region) parts.push(m.region);
+  if (m.projectId) parts.push(`Project: ${m.projectId}`);
+  if (m.subscriptionId) parts.push(`Sub: ${m.subscriptionId}`);
+  if (m.tenantId) parts.push(`Tenant: ${m.tenantId}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
 
 export function CloudConnectionsPage() {
   const { hasPermission } = useAuthStore();
@@ -66,14 +90,109 @@ export function CloudConnectionsPage() {
     }
   };
 
-  const columns = [
-    { key: 'name', header: 'Name', render: (c: CloudConnection) => <span className="font-medium">{c.name}</span> },
-    { key: 'provider', header: 'Provider', render: (c: CloudConnection) => <Badge>{c.provider.toUpperCase()}</Badge> },
-    { key: 'accountIdentifier', header: 'Account' },
-    { key: 'status', header: 'Status', render: (c: CloudConnection) => <Badge variant={statusVariant(c.status)}>{c.status}</Badge> },
-    { key: 'createdAt', header: 'Created', render: (c: CloudConnection) => new Date(c.createdAt).toLocaleDateString() },
+  // Stats
+  const errorCount = connections.filter((c) => c.status === 'error').length;
+  const distinctProviders = [...new Set(connections.map((c) => c.provider))];
+  const providerBreakdown = distinctProviders.map((p) => {
+    const count = connections.filter((c) => c.provider === p).length;
+    return `${count} ${p.toUpperCase()}`;
+  }).join(', ');
+  const totalDeployments = connections.reduce((sum, c) => sum + (c.deploymentCount || 0), 0);
+
+  const stats = [
     {
-      key: 'actions', header: '', render: (c: CloudConnection) => (
+      label: 'Total Connections',
+      value: connections.length,
+      secondary: errorCount > 0 ? `${errorCount} with errors` : 'All healthy',
+      secondaryColor: errorCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
+      icon: Cloud,
+      color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/50',
+    },
+    {
+      label: 'Providers',
+      value: distinctProviders.length,
+      secondary: providerBreakdown || 'None',
+      secondaryColor: 'text-gray-500 dark:text-gray-400',
+      icon: Layers,
+      color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/50',
+    },
+    {
+      label: 'Deployments',
+      value: totalDeployments,
+      secondary: `Across ${connections.length} connection${connections.length !== 1 ? 's' : ''}`,
+      secondaryColor: 'text-gray-500 dark:text-gray-400',
+      icon: Rocket,
+      color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/50',
+    },
+  ];
+
+  const columns = [
+    {
+      key: 'name',
+      header: 'Name',
+      render: (c: CloudConnection) => (
+        <div>
+          <span className="font-medium">{c.name}</span>
+          {c.validationMessage && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{c.validationMessage}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'provider',
+      header: 'Provider',
+      render: (c: CloudConnection) => (
+        <div className="flex items-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${providerDotColors[c.provider] || 'bg-gray-400'}`} />
+          <span className="text-sm">{providerLabels[c.provider] || c.provider.toUpperCase()}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'accountIdentifier',
+      header: 'Account',
+      render: (c: CloudConnection) => {
+        const subtitle = metadataSubtitle(c);
+        return (
+          <div>
+            <span className="text-sm">{c.accountIdentifier || '—'}</span>
+            {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (c: CloudConnection) => (
+        <div>
+          <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+          {c.lastValidatedAt && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Checked {timeAgo(c.lastValidatedAt)}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'deploymentCount',
+      header: 'Deployments',
+      render: (c: CloudConnection) => <span className="text-sm">{c.deploymentCount ?? 0}</span>,
+    },
+    {
+      key: 'createdBy',
+      header: 'Created By',
+      render: (c: CloudConnection) => (
+        <div>
+          <span className="text-sm">{c.createdBy?.displayName || '—'}</span>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{timeAgo(c.createdAt)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (c: CloudConnection) => (
         <div className="flex gap-2">
           <button onClick={() => handleValidate(c.id)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500" title="Validate"><CheckCircle className="w-4 h-4" /></button>
           {hasPermission(PERMISSIONS.CLOUD_CONNECTIONS_DELETE) && (
@@ -92,6 +211,27 @@ export function CloudConnectionsPage() {
           <Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" /> Add Connection</Button>
         )}
       </div>
+
+      {/* Stat Cards */}
+      {!isLoading && connections.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {stats.map((stat) => (
+            <Card key={stat.label}>
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <stat.icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className={`text-xs ${stat.secondaryColor}`}>{stat.secondary}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
       <Card>
         {isLoading ? <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>
           : <Table columns={columns} data={connections} emptyMessage="No cloud connections configured" />}

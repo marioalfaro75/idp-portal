@@ -1,11 +1,22 @@
 export type CloudProvider = 'aws' | 'gcp' | 'azure';
 
+export interface CloudConnectionMetadata {
+  region?: string;
+  projectId?: string;
+  subscriptionId?: string;
+  tenantId?: string;
+}
+
 export interface CloudConnection {
   id: string;
   name: string;
   provider: CloudProvider;
   status: 'connected' | 'error' | 'pending';
   accountIdentifier: string;
+  validationMessage: string;
+  lastValidatedAt: string | null;
+  metadata: CloudConnectionMetadata;
+  deploymentCount: number;
   createdById: string;
   createdBy?: { id: string; displayName: string };
   createdAt: string;

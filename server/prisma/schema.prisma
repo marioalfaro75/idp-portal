@@ -21,6 +21,7 @@ model User {
   sessions         Session[]
   oauthAccounts    OAuthAccount[]
   githubConnection GitHubConnection?
+  cloudConnections CloudConnection[]
   deployments      Deployment[]
   auditLogs        AuditLog[]
   services         Service[]       @relation("UserServices")
@@ -61,15 +62,19 @@ model Session {
 }
 
 model CloudConnection {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   name              String
-  provider          String   // aws, gcp, azure
+  provider          String    // aws, gcp, azure
   encryptedCredentials String // AES-256-GCM encrypted JSON
-  status            String   @default("pending") // connected, error, pending
-  accountIdentifier String   @default("")
+  status            String    @default("pending") // connected, error, pending
+  accountIdentifier String    @default("")
+  validationMessage String    @default("")
+  lastValidatedAt   DateTime?
+  metadata          String    @default("{}")  // JSON: region, projectId, subscriptionId, tenantId
   createdById       String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdBy         User      @relation(fields: [createdById], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   deployments Deployment[]
 }

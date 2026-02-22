@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Rocket, Layers, Cloud, Box, Wrench, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { timeAgo } from '../../utils/time';
 
 const deploymentStatusVariant = (status: string) => {
   switch (status) {
@@ -50,17 +51,6 @@ const providerColors: Record<string, string> = {
   azure: 'bg-blue-500',
   gcp: 'bg-red-500',
 };
-
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 export function DashboardPage() {
   const { data: deployments = [] } = useQuery({ queryKey: ['deployments'], queryFn: deploymentsApi.list });
