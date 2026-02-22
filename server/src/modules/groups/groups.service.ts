@@ -82,8 +82,7 @@ export async function setTemplates(groupId: string, templateIds: string[]) {
 
 /**
  * Returns a Prisma `where` clause fragment for filtering templates by group access.
- * Templates with no group assignments are visible to everyone.
- * Templates with group assignments are only visible to members of those groups.
+ * Non-admin users can only see templates assigned to groups they belong to.
  */
 export async function getTemplateAccessFilter(userId: string) {
   const memberships = await prisma.groupMember.findMany({
@@ -103,22 +102,16 @@ export async function getTemplateAccessFilter(userId: string) {
 
   const accessibleTemplateIds = [...new Set(accessibleTemplates.map((t) => t.templateId))];
 
-  return {
-    OR: [
-      { groupAssignments: { none: {} } },
-      ...(accessibleTemplateIds.length > 0 ? [{ id: { in: accessibleTemplateIds } }] : []),
-    ],
-  };
+  return accessibleTemplateIds.length > 0
+    ? { id: { in: accessibleTemplateIds } }
+    : { id: { in: [] } };
 }
 
 /**
  * Check if a user has access to a specific template.
- * Returns true if the template has no group assignments, or if the user is in a group that has the template.
+ * Returns true only if the user is in a group that has the template assigned.
  */
 export async function checkTemplateAccess(templateId: string, userId: string): Promise<boolean> {
-  const assignmentCount = await prisma.groupTemplate.count({ where: { templateId } });
-  if (assignmentCount === 0) return true;
-
   const memberships = await prisma.groupMember.findMany({
     where: { userId },
     select: { groupId: true },
