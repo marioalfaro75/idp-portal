@@ -12,6 +12,8 @@ import { Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Deployment } from '@idp/shared';
 
+const ACTIVE_STATUSES = ['applying', 'planning', 'destroying', 'rolling_back', 'dispatched', 'running'];
+
 const statusVariant = (status: string) => {
   switch (status) {
     case 'succeeded': return 'success' as const;
@@ -27,6 +29,7 @@ export function DeploymentListPage() {
   const { hasPermission, user } = useAuthStore();
   const queryClient = useQueryClient();
   const [cleaningUp, setCleaningUp] = useState(false);
+  const [purgingFailed, setPurgingFailed] = useState(false);
 
   const { data: deployments = [], isLoading } = useQuery({
     queryKey: ['deployments'],
@@ -35,6 +38,7 @@ export function DeploymentListPage() {
   });
 
   const canCleanup = hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) && user?.role?.name === 'Admin';
+  const failedCount = deployments.filter((d) => d.status === 'failed').length;
 
   const handleCleanup = async () => {
     if (!confirm('This will permanently delete all deployments in failed, destroyed, rolled back, pending, and planned states. Continue?')) return;
@@ -47,6 +51,31 @@ export function DeploymentListPage() {
       toast.error(err.response?.data?.error?.message || 'Cleanup failed');
     } finally {
       setCleaningUp(false);
+    }
+  };
+
+  const handlePurgeFailed = async () => {
+    if (!confirm(`This will permanently delete all ${failedCount} failed deployment${failedCount === 1 ? '' : 's'}. Continue?`)) return;
+    setPurgingFailed(true);
+    try {
+      const result = await deploymentsApi.purgeFailed();
+      toast.success(`Purged ${result.deleted} failed deployment${result.deleted === 1 ? '' : 's'}`);
+      queryClient.invalidateQueries({ queryKey: ['deployments'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Purge failed');
+    } finally {
+      setPurgingFailed(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Permanently delete this deployment?')) return;
+    try {
+      await deploymentsApi.delete(id);
+      toast.success('Deployment deleted');
+      queryClient.invalidateQueries({ queryKey: ['deployments'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Delete failed');
     }
   };
 
@@ -94,6 +123,24 @@ export function DeploymentListPage() {
       header: 'Created',
       render: (d: Deployment) => new Date(d.createdAt).toLocaleString(),
     },
+    ...(canCleanup
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            render: (d: Deployment) =>
+              !ACTIVE_STATUSES.includes(d.status) ? (
+                <button
+                  onClick={() => handleDelete(d.id)}
+                  className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                  title="Delete deployment"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              ) : null,
+          },
+        ]
+      : []),
   ];
 
   if (isLoading) {
@@ -105,9 +152,16 @@ export function DeploymentListPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Deployments</h1>
         {canCleanup && (
-          <Button variant="danger" onClick={handleCleanup} loading={cleaningUp}>
-            <Trash2 className="w-4 h-4 mr-2" /> Clean Up
-          </Button>
+          <div className="flex items-center gap-2">
+            {failedCount > 0 && (
+              <Button variant="danger" onClick={handlePurgeFailed} loading={purgingFailed}>
+                <Trash2 className="w-4 h-4 mr-2" /> Purge Failed ({failedCount})
+              </Button>
+            )}
+            <Button variant="danger" onClick={handleCleanup} loading={cleaningUp}>
+              <Trash2 className="w-4 h-4 mr-2" /> Clean Up
+            </Button>
+          </div>
         )}
       </div>
       <Card>

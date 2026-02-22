@@ -1,5 +1,5 @@
 import { prisma } from '../../prisma';
-import { NotFoundError, AppError } from '../../utils/errors';
+import { NotFoundError, ConflictError, AppError } from '../../utils/errors';
 import { deploymentQueue } from './deployment-queue';
 import * as terraformRunner from './terraform-runner';
 import * as githubExecutor from './github-executor';
@@ -334,10 +334,27 @@ async function executeDestroy(deploymentId: string) {
 }
 
 const STALE_STATUSES = ['failed', 'destroyed', 'rolled_back', 'pending', 'planned'];
+const ACTIVE_STATUSES = ['applying', 'planning', 'destroying', 'rolling_back', 'dispatched', 'running'];
 
 export async function cleanupStale() {
   const result = await prisma.deployment.deleteMany({
     where: { status: { in: STALE_STATUSES } },
+  });
+  return { deleted: result.count };
+}
+
+export async function remove(id: string) {
+  const deployment = await prisma.deployment.findUnique({ where: { id } });
+  if (!deployment) throw new NotFoundError('Deployment');
+  if (ACTIVE_STATUSES.includes(deployment.status)) {
+    throw new ConflictError('Cannot delete a deployment that is currently in progress');
+  }
+  await prisma.deployment.delete({ where: { id } });
+}
+
+export async function purgeFailed() {
+  const result = await prisma.deployment.deleteMany({
+    where: { status: 'failed' },
   });
   return { deleted: result.count };
 }

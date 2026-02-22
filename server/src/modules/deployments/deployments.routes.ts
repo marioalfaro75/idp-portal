@@ -24,6 +24,18 @@ router.delete('/stale', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHandler
   res.json(result);
 }));
 
+router.delete('/failed', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHandler(async (req, res) => {
+  const result = await service.purgeFailed();
+  await auditService.log({ action: 'purge_failed', resource: 'deployment', resourceId: null as any, userId: req.user!.sub, ipAddress: req.ip, details: { deleted: result.deleted } });
+  res.json(result);
+}));
+
+router.delete('/:id', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHandler(async (req, res) => {
+  await service.remove(req.params.id);
+  await auditService.log({ action: 'delete', resource: 'deployment', resourceId: req.params.id, userId: req.user!.sub, ipAddress: req.ip });
+  res.status(204).send();
+}));
+
 router.get('/:id', authorize(PERMISSIONS.DEPLOYMENTS_LIST), asyncHandler(async (req, res) => {
   const deployment = await service.get(req.params.id);
   res.json(deployment);
