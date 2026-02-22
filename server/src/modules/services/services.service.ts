@@ -3,14 +3,25 @@ import { NotFoundError, AppError } from '../../utils/errors';
 import { logger } from '../../utils/logger';
 import { readScaffoldFiles } from '../templates/template-parser';
 import * as githubService from '../github/github.service';
+import * as groupsService from '../groups/groups.service';
 
-export async function list(query?: { search?: string }) {
+interface UserContext {
+  sub: string;
+  role: string;
+}
+
+export async function list(query?: { search?: string }, user?: UserContext) {
   const where: Record<string, unknown> = {};
   if (query?.search) {
     where.OR = [
       { name: { contains: query.search } },
       { slug: { contains: query.search } },
     ];
+  }
+
+  if (user && user.role !== 'Admin') {
+    const accessFilter = await groupsService.getTemplateAccessFilter(user.sub);
+    where.template = accessFilter;
   }
 
   const services = await prisma.service.findMany({
@@ -29,7 +40,7 @@ export async function list(query?: { search?: string }) {
   return services.map(formatService);
 }
 
-export async function get(id: string) {
+export async function get(id: string, user?: UserContext) {
   const service = await prisma.service.findUnique({
     where: { id },
     include: {
@@ -42,6 +53,12 @@ export async function get(id: string) {
     },
   });
   if (!service) throw new NotFoundError('Service');
+
+  if (user && user.role !== 'Admin') {
+    const hasAccess = await groupsService.checkTemplateAccess(service.templateId, user.sub);
+    if (!hasAccess) throw new NotFoundError('Service');
+  }
+
   return formatService(service);
 }
 

@@ -19,6 +19,7 @@ export const PERMISSIONS = {
   SERVICES_CREATE: 'services.create',
   SERVICES_MANAGE: 'services.manage',
   SETTINGS_MANAGE: 'settings.manage',
+  GROUPS_MANAGE: 'groups.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

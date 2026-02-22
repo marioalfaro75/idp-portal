@@ -13,8 +13,8 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize(PERMISSIONS.DEPLOYMENTS_LIST), asyncHandler(async (_req, res) => {
-  const deployments = await service.list();
+router.get('/', authorize(PERMISSIONS.DEPLOYMENTS_LIST), asyncHandler(async (req, res) => {
+  const deployments = await service.list(req.user!);
   res.json(deployments);
 }));
 
@@ -37,12 +37,12 @@ router.delete('/:id', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHandler(a
 }));
 
 router.get('/:id', authorize(PERMISSIONS.DEPLOYMENTS_LIST), asyncHandler(async (req, res) => {
-  const deployment = await service.get(req.params.id);
+  const deployment = await service.get(req.params.id, req.user!);
   res.json(deployment);
 }));
 
 router.post('/', authorize(PERMISSIONS.DEPLOYMENTS_CREATE), validate(createDeploymentSchema), asyncHandler(async (req, res) => {
-  const deployment = await service.create(req.body, req.user!.sub);
+  const deployment = await service.create(req.body, req.user!);
   await auditService.log({ action: 'create', resource: 'deployment', resourceId: deployment.id, userId: req.user!.sub, ipAddress: req.ip, details: { name: deployment.name } });
   res.status(201).json(deployment);
 }));

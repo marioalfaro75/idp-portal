@@ -4,7 +4,7 @@ import { useUiStore } from '../../stores/ui-store';
 import { PERMISSIONS } from '@idp/shared';
 import {
   LayoutDashboard, Layers, Rocket, Cloud, GitBranch,
-  Users, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box,
+  Users, UsersRound, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box,
 } from 'lucide-react';
 
 const navItems = [
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/github', label: 'GitHub', icon: GitBranch, permission: PERMISSIONS.GITHUB_MANAGE },
   { to: '/admin/users', label: 'Users', icon: Users, permission: PERMISSIONS.USERS_LIST },
   { to: '/admin/roles', label: 'Roles', icon: Shield, permission: PERMISSIONS.ROLES_MANAGE },
+  { to: '/admin/groups', label: 'Groups', icon: UsersRound, permission: PERMISSIONS.GROUPS_MANAGE },
   { to: '/admin/audit-log', label: 'Audit Log', icon: FileText, permission: PERMISSIONS.AUDIT_LOGS_VIEW },
   { to: '/admin/settings', label: 'Settings', icon: Settings, permission: PERMISSIONS.SETTINGS_MANAGE },
 ];

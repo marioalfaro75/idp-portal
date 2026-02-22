@@ -5,3 +5,4 @@ export * from './deployment';
 export * from './github';
 export * from './service';
 export * from './variable-validator';
+export * from './group';

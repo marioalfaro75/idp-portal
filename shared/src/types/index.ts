@@ -6,3 +6,4 @@ export * from './deployment';
 export * from './github';
 export * from './audit';
 export * from './service';
+export * from './group';

@@ -20,6 +20,7 @@ import settingsRoutes from './modules/settings/settings.routes';
 import { checkTerraformAvailable } from './modules/deployments/terraform-runner';
 import { pollGitHubDeployments } from './modules/deployments/github-executor';
 import servicesRoutes from './modules/services/services.routes';
+import groupsRoutes from './modules/groups/groups.routes';
 import { pollWorkflowRuns } from './modules/services/workflow-poller';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/github', githubRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/services', servicesRoutes);
+app.use('/api/groups', groupsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

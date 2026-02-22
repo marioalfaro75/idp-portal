@@ -15,17 +15,17 @@ router.get('/', authorize(PERMISSIONS.TEMPLATES_LIST), asyncHandler(async (req, 
     provider: req.query.provider as string,
     category: req.query.category as string,
     search: req.query.search as string,
-  });
+  }, req.user!);
   res.json(templates);
 }));
 
 router.get('/slug/:slug', authorize(PERMISSIONS.TEMPLATES_LIST), asyncHandler(async (req, res) => {
-  const template = await service.getBySlug(req.params.slug);
+  const template = await service.getBySlug(req.params.slug, req.user!);
   res.json(template);
 }));
 
 router.get('/:id', authorize(PERMISSIONS.TEMPLATES_LIST), asyncHandler(async (req, res) => {
-  const template = await service.get(req.params.id);
+  const template = await service.get(req.params.id, req.user!);
   res.json(template);
 }));
 

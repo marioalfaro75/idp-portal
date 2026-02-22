@@ -4,10 +4,16 @@ import { deploymentQueue } from './deployment-queue';
 import * as terraformRunner from './terraform-runner';
 import * as githubExecutor from './github-executor';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
+import * as groupsService from '../groups/groups.service';
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
 import type { TemplateVariable } from '@idp/shared';
 import { validateVariables } from '@idp/shared';
+
+interface UserContext {
+  sub: string;
+  role: string;
+}
 
 // SSE log emitters per deployment
 const logEmitters = new Map<string, EventEmitter>();
@@ -19,8 +25,16 @@ export function getLogEmitter(deploymentId: string): EventEmitter {
   return logEmitters.get(deploymentId)!;
 }
 
-export async function list() {
+export async function list(user?: UserContext) {
+  const where: Record<string, unknown> = {};
+
+  if (user && user.role !== 'Admin') {
+    const accessFilter = await groupsService.getTemplateAccessFilter(user.sub);
+    where.template = accessFilter;
+  }
+
   const deployments = await prisma.deployment.findMany({
+    where,
     include: {
       template: { select: { id: true, name: true, provider: true, category: true } },
       cloudConnection: { select: { id: true, name: true, provider: true } },
@@ -31,7 +45,7 @@ export async function list() {
   return deployments.map(formatDeployment);
 }
 
-export async function get(id: string) {
+export async function get(id: string, user?: UserContext) {
   const deployment = await prisma.deployment.findUnique({
     where: { id },
     include: {
@@ -41,12 +55,23 @@ export async function get(id: string) {
     },
   });
   if (!deployment) throw new NotFoundError('Deployment');
+
+  if (user && user.role !== 'Admin') {
+    const hasAccess = await groupsService.checkTemplateAccess(deployment.templateId, user.sub);
+    if (!hasAccess) throw new NotFoundError('Deployment');
+  }
+
   return formatDeployment(deployment);
 }
 
-export async function create(data: { name: string; templateId: string; cloudConnectionId: string; variables: Record<string, string>; executionMethod?: string; githubRepo?: string; githubWorkflowId?: string; githubRef?: string }, userId: string) {
+export async function create(data: { name: string; templateId: string; cloudConnectionId: string; variables: Record<string, string>; executionMethod?: string; githubRepo?: string; githubWorkflowId?: string; githubRef?: string }, user: UserContext) {
   const template = await prisma.template.findUnique({ where: { id: data.templateId } });
   if (!template) throw new NotFoundError('Template');
+
+  if (user.role !== 'Admin') {
+    const hasAccess = await groupsService.checkTemplateAccess(data.templateId, user.sub);
+    if (!hasAccess) throw new NotFoundError('Template');
+  }
 
   const connection = await prisma.cloudConnection.findUnique({ where: { id: data.cloudConnectionId } });
   if (!connection) throw new NotFoundError('Cloud connection');
@@ -74,7 +99,7 @@ export async function create(data: { name: string; templateId: string; cloudConn
       githubRepo: data.githubRepo || null,
       githubWorkflowId: data.githubWorkflowId || null,
       githubRef: data.githubRef || null,
-      createdById: userId,
+      createdById: user.sub,
     },
     include: {
       template: { select: { id: true, name: true, provider: true, category: true } },
@@ -84,7 +109,7 @@ export async function create(data: { name: string; templateId: string; cloudConn
   });
 
   if (executionMethod === 'github') {
-    githubExecutor.dispatchAndTrack(deployment.id, userId).catch((err) => {
+    githubExecutor.dispatchAndTrack(deployment.id, user.sub).catch((err) => {
       logger.error(`GitHub dispatch failed for deployment ${deployment.id}`, { error: (err as Error).message });
       prisma.deployment.update({
         where: { id: deployment.id },

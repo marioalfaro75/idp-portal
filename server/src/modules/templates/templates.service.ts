@@ -1,8 +1,14 @@
 import { prisma } from '../../prisma';
 import { NotFoundError } from '../../utils/errors';
 import { scanTemplates } from './template-parser';
+import * as groupsService from '../groups/groups.service';
 
-export async function list(query?: { provider?: string; category?: string; search?: string }) {
+interface UserContext {
+  sub: string;
+  role: string;
+}
+
+export async function list(query?: { provider?: string; category?: string; search?: string }, user?: UserContext) {
   const where: Record<string, unknown> = {};
   if (query?.provider) where.provider = query.provider;
   if (query?.category) where.category = query.category;
@@ -13,19 +19,36 @@ export async function list(query?: { provider?: string; category?: string; searc
     ];
   }
 
+  if (user && user.role !== 'Admin') {
+    const accessFilter = await groupsService.getTemplateAccessFilter(user.sub);
+    where.AND = [accessFilter];
+  }
+
   const templates = await prisma.template.findMany({ where, orderBy: { name: 'asc' } });
   return templates.map(formatTemplate);
 }
 
-export async function get(id: string) {
+export async function get(id: string, user?: UserContext) {
   const template = await prisma.template.findUnique({ where: { id } });
   if (!template) throw new NotFoundError('Template');
+
+  if (user && user.role !== 'Admin') {
+    const hasAccess = await groupsService.checkTemplateAccess(id, user.sub);
+    if (!hasAccess) throw new NotFoundError('Template');
+  }
+
   return formatTemplate(template);
 }
 
-export async function getBySlug(slug: string) {
+export async function getBySlug(slug: string, user?: UserContext) {
   const template = await prisma.template.findUnique({ where: { slug } });
   if (!template) throw new NotFoundError('Template');
+
+  if (user && user.role !== 'Admin') {
+    const hasAccess = await groupsService.checkTemplateAccess(template.id, user.sub);
+    if (!hasAccess) throw new NotFoundError('Template');
+  }
+
   return formatTemplate(template);
 }
 

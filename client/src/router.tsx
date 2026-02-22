@@ -17,6 +17,7 @@ import { CloudConnectionsPage } from './pages/cloud-connections/CloudConnections
 import { GitHubPage } from './pages/github/GitHubPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { RolesPage } from './pages/admin/RolesPage';
+import { GroupsPage } from './pages/admin/GroupsPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'github', element: <GitHubPage /> },
       { path: 'admin/users', element: <UsersPage /> },
       { path: 'admin/roles', element: <RolesPage /> },
+      { path: 'admin/groups', element: <GroupsPage /> },
       { path: 'admin/audit-log', element: <AuditLogPage /> },
       { path: 'admin/settings', element: <SettingsPage /> },
     ],

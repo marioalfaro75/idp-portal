@@ -13,12 +13,12 @@ router.use(authenticate);
 
 router.get('/', authorize(PERMISSIONS.SERVICES_LIST), asyncHandler(async (req, res) => {
   const search = req.query.search as string | undefined;
-  const services = await service.list({ search });
+  const services = await service.list({ search }, req.user!);
   res.json(services);
 }));
 
 router.get('/:id', authorize(PERMISSIONS.SERVICES_LIST), asyncHandler(async (req, res) => {
-  const svc = await service.get(req.params.id);
+  const svc = await service.get(req.params.id, req.user!);
   res.json(svc);
 }));
 
