@@ -41,6 +41,12 @@ router.post('/:id/destroy', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHan
   res.json(deployment);
 }));
 
+router.post('/:id/rollback', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHandler(async (req, res) => {
+  const deployment = await service.rollbackDeployment(req.params.id, req.user!.sub);
+  await auditService.log({ action: 'rollback', resource: 'deployment', resourceId: req.params.id, userId: req.user!.sub, ipAddress: req.ip });
+  res.json(deployment);
+}));
+
 // SSE endpoint for deployment logs - auth via query param since EventSource can't set headers
 router.get('/:id/logs', (req, res) => {
   const token = req.query.token as string;

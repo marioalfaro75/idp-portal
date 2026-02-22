@@ -10,6 +10,7 @@ export interface TerraformResult {
   success: boolean;
   output: string;
   outputs?: Record<string, string>;
+  state?: string;
 }
 
 type LogCallback = (message: string) => void;
@@ -187,6 +188,7 @@ export async function apply(
     success: applyResult.code === 0,
     output: applyResult.stdout + (applyResult.stderr ? '\n' + applyResult.stderr : ''),
     outputs,
+    state,
   };
 }
 

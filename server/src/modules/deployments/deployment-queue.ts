@@ -3,7 +3,7 @@ import { logger } from '../../utils/logger';
 
 interface Job {
   deploymentId: string;
-  action: 'plan_and_apply' | 'destroy';
+  action: 'plan_and_apply' | 'destroy' | 'rollback';
   execute: () => Promise<void>;
 }
 

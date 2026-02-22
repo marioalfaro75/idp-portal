@@ -149,6 +149,7 @@ async function executePlanAndApply(deploymentId: string) {
         status: applyResult.success ? 'succeeded' : 'failed',
         outputs: applyResult.outputs ? JSON.stringify(applyResult.outputs) : null,
         errorMessage: applyResult.success ? null : applyResult.output,
+        terraformState: applyResult.state || null,
       },
     });
 
@@ -193,6 +194,90 @@ export async function destroyDeployment(id: string, userId: string) {
   }
 
   return get(id);
+}
+
+export async function rollbackDeployment(id: string, userId: string) {
+  const deployment = await prisma.deployment.findUnique({
+    where: { id },
+    include: { template: true },
+  });
+  if (!deployment) throw new NotFoundError('Deployment');
+  if (deployment.status !== 'succeeded') {
+    throw new AppError(400, 'Can only roll back succeeded deployments');
+  }
+
+  if (deployment.executionMethod === 'github') {
+    await prisma.deployment.update({ where: { id }, data: { status: 'rolling_back' } });
+    githubExecutor.dispatchRollback(id, userId).catch((err) => {
+      logger.error(`GitHub rollback dispatch failed for deployment ${id}`, { error: (err as Error).message });
+      prisma.deployment.update({
+        where: { id },
+        data: { status: 'failed', errorMessage: (err as Error).message },
+      }).catch(() => {});
+    });
+  } else {
+    await prisma.deployment.update({ where: { id }, data: { status: 'rolling_back' } });
+    deploymentQueue.enqueue({
+      deploymentId: id,
+      action: 'rollback',
+      execute: () => executeRollback(id),
+    });
+  }
+
+  return get(id);
+}
+
+async function executeRollback(deploymentId: string) {
+  const emitter = getLogEmitter(deploymentId);
+
+  try {
+    const deployment = await prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { template: true },
+    });
+    if (!deployment || !deployment.terraformState) {
+      await prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { status: 'rolled_back', destroyOutput: 'No state found, marking as rolled back' },
+      });
+      emitter.emit('log', { type: 'complete', message: 'rolled_back' });
+      return;
+    }
+
+    const { credentials } = await cloudConnectionService.getDecryptedCredentials(deployment.cloudConnectionId);
+    const variables = JSON.parse(deployment.variables);
+
+    emitter.emit('log', { type: 'status', message: 'Rolling back...' });
+
+    const result = await terraformRunner.destroy(
+      deployment.template.templatePath,
+      variables,
+      deployment.template.provider,
+      credentials,
+      deployment.terraformState,
+      (msg) => emitter.emit('log', { type: 'log', message: msg }),
+    );
+
+    await prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        destroyOutput: result.output,
+        status: result.success ? 'rolled_back' : 'failed',
+        errorMessage: result.success ? null : result.output,
+        terraformState: result.success ? null : deployment.terraformState,
+      },
+    });
+
+    emitter.emit('log', { type: 'complete', message: result.success ? 'rolled_back' : 'failed' });
+  } catch (err) {
+    logger.error(`Rollback ${deploymentId} failed`, { error: (err as Error).message });
+    await prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { status: 'failed', errorMessage: (err as Error).message },
+    });
+    emitter.emit('log', { type: 'error', message: (err as Error).message });
+    emitter.emit('log', { type: 'complete', message: 'failed' });
+  }
 }
 
 async function executeDestroy(deploymentId: string) {
@@ -248,7 +333,7 @@ async function executeDestroy(deploymentId: string) {
   }
 }
 
-const STALE_STATUSES = ['failed', 'destroyed', 'pending', 'planned'];
+const STALE_STATUSES = ['failed', 'destroyed', 'rolled_back', 'pending', 'planned'];
 
 export async function cleanupStale() {
   const result = await prisma.deployment.deleteMany({

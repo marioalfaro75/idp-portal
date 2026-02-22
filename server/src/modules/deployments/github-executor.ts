@@ -8,7 +8,7 @@ import { logger } from '../../utils/logger';
 import { getLogEmitter } from './deployments.service';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { listWorkflows, getWorkflowFileContent, updateWorkflowFile, pushScaffoldFiles } from '../github/github.service';
-import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars } from '../github/workflow-validator';
+import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars, fixTerraformDestroyStep, fixPermissionsContentsWrite, fixTerraformStatePersistence } from '../github/workflow-validator';
 
 async function getOctokit(userId: string): Promise<Octokit> {
   const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
@@ -179,6 +179,9 @@ async function ensureWorkflowReady(
     const fmtFix = fixTerraformFmtCheck(workDirFix.fixed);
     const applyFix = fixTerraformApplyCondition(fmtFix.fixed);
     const envFix = fixTerraformEnvVars(applyFix.fixed, credentialSecretNames);
+    const destroyFix = fixTerraformDestroyStep(envFix.fixed);
+    const permsFix = fixPermissionsContentsWrite(destroyFix.fixed);
+    const stateFix = fixTerraformStatePersistence(permsFix.fixed);
 
     const allChanges = [...result.changes];
     if (wrapperFix.changed) allChanges.push('Set terraform_wrapper: false on setup-terraform');
@@ -186,9 +189,12 @@ async function ensureWorkflowReady(
     if (fmtFix.changed) allChanges.push('Changed terraform fmt -check to terraform fmt');
     if (applyFix.changed) allChanges.push('Fixed Terraform Apply condition for workflow_dispatch');
     if (envFix.changed) allChanges.push('Added cloud credential env vars from repo secrets');
+    if (destroyFix.changed) allChanges.push('Added Terraform Destroy step for destroy/rollback actions');
+    if (permsFix.changed) allChanges.push('Updated permissions.contents to write for state persistence');
+    if (stateFix.changed) allChanges.push('Added steps to persist terraform state to repo');
 
-    const finalContent = envFix.fixed;
-    const anyFixApplied = wrapperFix.changed || workDirFix.changed || fmtFix.changed || applyFix.changed || envFix.changed;
+    const finalContent = stateFix.fixed;
+    const anyFixApplied = wrapperFix.changed || workDirFix.changed || fmtFix.changed || applyFix.changed || envFix.changed || destroyFix.changed || permsFix.changed || stateFix.changed;
     const needsUpdate = !result.valid || anyFixApplied;
 
     if (!needsUpdate) {
@@ -342,6 +348,69 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   }, 5000);
 }
 
+export async function dispatchRollback(deploymentId: string, userId: string): Promise<void> {
+  const deployment = await prisma.deployment.findUnique({
+    where: { id: deploymentId },
+    include: { template: true },
+  });
+  if (!deployment) throw new Error('Deployment not found');
+
+  const octokit = await getOctokit(userId);
+  const { owner, repo } = parseRepo(deployment.githubRepo!);
+  const workflowId = deployment.githubWorkflowId!;
+  const ref = deployment.githubRef || 'main';
+  const variables = JSON.parse(deployment.variables);
+
+  await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables);
+  const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+  await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
+
+  const dispatchedAt = new Date();
+
+  try {
+    await octokit.actions.createWorkflowDispatch({
+      owner,
+      repo,
+      workflow_id: workflowId,
+      ref,
+      inputs: {
+        template_slug: deployment.template.slug,
+        template_provider: deployment.template.provider,
+        variables: JSON.stringify(variables),
+        deployment_id: deployment.id,
+        deployment_name: deployment.name,
+        action: 'destroy',
+      },
+    });
+  } catch (err: any) {
+    if (err.status === 403 || err.message?.includes('Resource not accessible')) {
+      throw new Error(
+        'GitHub token lacks permission to dispatch workflows. ' +
+        'For classic PATs, enable the "repo" scope. ' +
+        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+      );
+    }
+    throw err;
+  }
+
+  await prisma.deployment.update({
+    where: { id: deploymentId },
+    data: { status: 'rolling_back' },
+  });
+
+  const emitter = getLogEmitter(deploymentId);
+  emitter.emit('log', { type: 'status', message: 'Rollback workflow dispatched to GitHub Actions' });
+
+  setTimeout(async () => {
+    try {
+      await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+    } catch (err) {
+      logger.error(`Failed to find GitHub run for rollback ${deploymentId}`, { error: (err as Error).message });
+    }
+  }, 5000);
+}
+
 async function findAndStoreRunId(
   deploymentId: string,
   userId: string,
@@ -390,7 +459,7 @@ export async function pollGitHubDeployments(): Promise<void> {
     const deployments = await prisma.deployment.findMany({
       where: {
         executionMethod: 'github',
-        status: { in: ['dispatched', 'running', 'destroying'] },
+        status: { in: ['dispatched', 'running', 'destroying', 'rolling_back'] },
         githubRunId: { not: null },
       },
     });
@@ -425,15 +494,16 @@ export async function pollGitHubDeployments(): Promise<void> {
 
           let newStatus: string | null = null;
           const isDestroying = deployment.status === 'destroying';
+          const isRollingBack = deployment.status === 'rolling_back';
 
           if (run.status === 'completed') {
             if (run.conclusion === 'success') {
-              newStatus = isDestroying ? 'destroyed' : 'succeeded';
+              newStatus = isDestroying ? 'destroyed' : isRollingBack ? 'rolled_back' : 'succeeded';
             } else {
               newStatus = 'failed';
             }
           } else if (run.status === 'in_progress') {
-            newStatus = isDestroying ? 'destroying' : 'running';
+            newStatus = isDestroying ? 'destroying' : isRollingBack ? 'rolling_back' : 'running';
           }
           // queued/waiting/pending → keep current status
 
@@ -450,7 +520,7 @@ export async function pollGitHubDeployments(): Promise<void> {
             const emitter = getLogEmitter(deployment.id);
             emitter.emit('log', { type: 'status', message: `GitHub Actions: ${newStatus}` });
 
-            if (['succeeded', 'failed', 'destroyed'].includes(newStatus)) {
+            if (['succeeded', 'failed', 'destroyed', 'rolled_back'].includes(newStatus)) {
               emitter.emit('log', { type: 'complete', message: newStatus });
             }
 

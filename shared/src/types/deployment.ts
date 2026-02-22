@@ -7,6 +7,8 @@ export type DeploymentStatus =
   | 'failed'
   | 'destroying'
   | 'destroyed'
+  | 'rolling_back'
+  | 'rolled_back'
   | 'dispatched'
   | 'running';
 

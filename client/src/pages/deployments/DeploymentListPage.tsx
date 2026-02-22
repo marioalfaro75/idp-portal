@@ -16,8 +16,9 @@ const statusVariant = (status: string) => {
   switch (status) {
     case 'succeeded': return 'success' as const;
     case 'failed': return 'danger' as const;
-    case 'applying': case 'planning': case 'destroying': case 'dispatched': case 'running': return 'warning' as const;
+    case 'applying': case 'planning': case 'destroying': case 'rolling_back': case 'dispatched': case 'running': return 'warning' as const;
     case 'destroyed': return 'default' as const;
+    case 'rolled_back': return 'info' as const;
     default: return 'info' as const;
   }
 };
@@ -36,7 +37,7 @@ export function DeploymentListPage() {
   const canCleanup = hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) && user?.role?.name === 'Admin';
 
   const handleCleanup = async () => {
-    if (!confirm('This will permanently delete all deployments in failed, destroyed, pending, and planned states. Continue?')) return;
+    if (!confirm('This will permanently delete all deployments in failed, destroyed, rolled back, pending, and planned states. Continue?')) return;
     setCleaningUp(true);
     try {
       const result = await deploymentsApi.cleanupStale();

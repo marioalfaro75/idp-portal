@@ -439,6 +439,199 @@ export function fixWorkingDirectory(content: string): { fixed: string; changed: 
   return { fixed, changed };
 }
 
+/**
+ * Ensures the workflow has a "Terraform Destroy" step that runs
+ * `terraform destroy -auto-approve` when `inputs.action == 'destroy'`.
+ */
+export function fixTerraformDestroyStep(content: string): { fixed: string; changed: boolean } {
+  const hasDestroyStep = /name:\s*Terraform Destroy/m.test(content);
+
+  // Check if Apply step is broken (missing `run:`)
+  const applyBroken = /- name: Terraform Apply\s*\n\s*if:.*\n\s*\n/m.test(content) ||
+    /- name: Terraform Apply\s*\n\s*if:.*\n\s*- name:/m.test(content);
+
+  if (applyBroken) {
+    // Rebuild both steps cleanly by removing the broken Destroy step (if any)
+    // and the broken Apply step, then re-adding both correctly
+    const lines = content.split('\n');
+    const result: string[] = [];
+    let stepIndent = '    ';
+    let i = 0;
+
+    while (i < lines.length) {
+      const applyMatch = lines[i].match(/^(\s*)-\s*name:\s*Terraform Apply/);
+      const destroyMatch = lines[i].match(/^(\s*)-\s*name:\s*Terraform Destroy/);
+
+      if (applyMatch || destroyMatch) {
+        if (applyMatch) stepIndent = applyMatch[1];
+        // Skip this entire step
+        i++;
+        const propIndent = stepIndent + '  ';
+        while (i < lines.length) {
+          if (lines[i].match(new RegExp(`^${stepIndent}-\\s`))) break;
+          if (lines[i].trim() !== '' && !lines[i].startsWith(propIndent)) break;
+          i++;
+        }
+        continue;
+      }
+      result.push(lines[i]);
+      i++;
+    }
+
+    // Remove trailing blank lines before appending
+    while (result.length > 0 && result[result.length - 1].trim() === '') {
+      result.pop();
+    }
+
+    const propIndent = stepIndent + '  ';
+    result.push(
+      '',
+      `${stepIndent}- name: Terraform Apply`,
+      `${propIndent}if: github.event_name == 'workflow_dispatch' && inputs.action == 'apply'`,
+      `${propIndent}run: terraform apply -auto-approve tfplan`,
+      '',
+      `${stepIndent}- name: Terraform Destroy`,
+      `${propIndent}if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'`,
+      `${propIndent}run: terraform destroy -auto-approve -input=false`,
+    );
+
+    return { fixed: result.join('\n') + '\n', changed: true };
+  }
+
+  if (hasDestroyStep) {
+    return { fixed: content, changed: false };
+  }
+
+  const lines = content.split('\n');
+  let applyStepStart = -1;
+  let stepIndent = '';
+
+  // Find the "Terraform Apply" step
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^(\s*)-\s*name:\s*Terraform Apply/);
+    if (match) {
+      applyStepStart = i;
+      stepIndent = match[1];
+      break;
+    }
+  }
+
+  if (applyStepStart === -1) {
+    return { fixed: content, changed: false };
+  }
+
+  // Find the end of the Apply step by scanning for the next step or end of block
+  const propIndent = stepIndent + '  ';
+  let insertAfter = applyStepStart;
+  for (let i = applyStepStart + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Next step at same indent level
+    if (line.match(new RegExp(`^${stepIndent}-\\s`))) {
+      break;
+    }
+    // Continuation line (indented deeper or blank)
+    if (line.trim() === '' || line.startsWith(propIndent)) {
+      insertAfter = i;
+    } else {
+      break;
+    }
+  }
+
+  // Insert destroy step after the apply step
+  const destroyLines = [
+    '',
+    `${stepIndent}- name: Terraform Destroy`,
+    `${propIndent}if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'`,
+    `${propIndent}run: terraform destroy -auto-approve -input=false`,
+  ];
+
+  const result = [
+    ...lines.slice(0, insertAfter + 1),
+    ...destroyLines,
+    ...lines.slice(insertAfter + 1),
+  ];
+
+  return { fixed: result.join('\n'), changed: true };
+}
+
+/**
+ * Ensures `permissions.contents` is `write` so the workflow can commit
+ * terraform state back to the repo after apply/destroy.
+ */
+export function fixPermissionsContentsWrite(content: string): { fixed: string; changed: boolean } {
+  // Match `contents: read` under a permissions block
+  const regex = /^(\s*contents:\s*)read\s*$/m;
+  if (!regex.test(content)) {
+    return { fixed: content, changed: false };
+  }
+  const fixed = content.replace(regex, '$1write');
+  return { fixed, changed: true };
+}
+
+/**
+ * Adds a step to commit terraform.tfstate back to the repo after
+ * apply and destroy, so state persists across workflow runs.
+ */
+export function fixTerraformStatePersistence(content: string): { fixed: string; changed: boolean } {
+  if (/name:\s*Save Terraform State/m.test(content)) {
+    return { fixed: content, changed: false };
+  }
+
+  // Find the last step to determine indent and insertion point
+  const lines = content.split('\n');
+  let lastStepLine = -1;
+  let stepIndent = '    ';
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)-\s*name:\s*/);
+    if (m) {
+      lastStepLine = i;
+      stepIndent = m[1];
+    }
+  }
+
+  if (lastStepLine === -1) {
+    return { fixed: content, changed: false };
+  }
+
+  // Find the end of the last step
+  const propIndent = stepIndent + '  ';
+  let insertAfter = lastStepLine;
+  for (let i = lastStepLine + 1; i < lines.length; i++) {
+    if (lines[i].match(new RegExp(`^${stepIndent}-\\s`))) break;
+    if (lines[i].trim() === '' || lines[i].startsWith(propIndent)) {
+      insertAfter = i;
+    } else {
+      break;
+    }
+  }
+
+  const saveStep = [
+    '',
+    `${stepIndent}- name: Save Terraform State`,
+    `${propIndent}if: always() && github.event_name == 'workflow_dispatch'`,
+    `${propIndent}working-directory: \${{ github.workspace }}`,
+    `${propIndent}run: |`,
+    `${propIndent}  git config user.name "github-actions[bot]"`,
+    `${propIndent}  git config user.email "github-actions[bot]@users.noreply.github.com"`,
+    `${propIndent}  git pull --rebase origin main || true`,
+    `${propIndent}  if [ -f terraform/terraform.tfstate ]; then`,
+    `${propIndent}    git add -f terraform/terraform.tfstate`,
+    `${propIndent}  else`,
+    `${propIndent}    git rm -f terraform/terraform.tfstate 2>/dev/null || true`,
+    `${propIndent}  fi`,
+    `${propIndent}  git diff --cached --quiet || (git commit -m "Update terraform state [skip ci]" && git push)`,
+  ];
+
+  const result = [
+    ...lines.slice(0, insertAfter + 1),
+    ...saveStep,
+    ...lines.slice(insertAfter + 1),
+  ];
+
+  return { fixed: result.join('\n'), changed: true };
+}
+
 function buildInputsBlock(inputs: string[]): string {
   return inputs
     .map(

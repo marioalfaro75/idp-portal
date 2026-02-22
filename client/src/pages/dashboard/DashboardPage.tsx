@@ -13,7 +13,8 @@ const deploymentStatusVariant = (status: string) => {
   switch (status) {
     case 'succeeded': return 'success' as const;
     case 'failed': return 'danger' as const;
-    case 'applying': case 'planning': return 'warning' as const;
+    case 'applying': case 'planning': case 'rolling_back': return 'warning' as const;
+    case 'rolled_back': return 'info' as const;
     case 'destroyed': return 'default' as const;
     default: return 'info' as const;
   }
@@ -38,6 +39,8 @@ const statusBarColors: Record<string, string> = {
   running: 'bg-blue-500',
   destroying: 'bg-orange-500',
   destroyed: 'bg-gray-400',
+  rolling_back: 'bg-indigo-500',
+  rolled_back: 'bg-indigo-300',
   pending: 'bg-gray-400',
   planned: 'bg-yellow-300',
 };
@@ -65,7 +68,7 @@ export function DashboardPage() {
   const { data: connections = [] } = useQuery({ queryKey: ['cloudConnections'], queryFn: cloudConnectionsApi.list });
   const { data: services = [] } = useQuery({ queryKey: ['services'], queryFn: () => servicesApi.list() });
 
-  const activeStatuses = new Set(['pending', 'planning', 'applying', 'running', 'dispatched']);
+  const activeStatuses = new Set(['pending', 'planning', 'applying', 'running', 'dispatched', 'rolling_back']);
   const activeDeployments = deployments.filter((d) => activeStatuses.has(d.status));
   const errorConnections = connections.filter((c) => c.status === 'error');
   const activeServices = services.filter((s) => s.status === 'active');
@@ -157,7 +160,7 @@ export function DashboardPage() {
     },
   ];
 
-  const statusOrder = ['succeeded', 'failed', 'applying', 'planning', 'dispatched', 'running', 'destroying', 'destroyed', 'pending', 'planned'];
+  const statusOrder = ['succeeded', 'failed', 'applying', 'planning', 'dispatched', 'running', 'destroying', 'destroyed', 'rolling_back', 'rolled_back', 'pending', 'planned'];
 
   return (
     <div className="space-y-6">

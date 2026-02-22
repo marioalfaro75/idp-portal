@@ -7,14 +7,15 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS } from '@idp/shared';
-import { ArrowLeft, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Trash2, RotateCcw, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const statusVariant = (status: string) => {
   switch (status) {
     case 'succeeded': return 'success' as const;
     case 'failed': return 'danger' as const;
-    case 'applying': case 'planning': case 'destroying': case 'dispatched': case 'running': return 'warning' as const;
+    case 'applying': case 'planning': case 'destroying': case 'rolling_back': case 'dispatched': case 'running': return 'warning' as const;
+    case 'rolled_back': return 'info' as const;
     default: return 'info' as const;
   }
 };
@@ -25,6 +26,7 @@ export function DeploymentDetailPage() {
   const queryClient = useQueryClient();
   const [logs, setLogs] = useState<string[]>([]);
   const [destroying, setDestroying] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
 
   const { data: deployment, isLoading } = useQuery({
     queryKey: ['deployment', id],
@@ -32,7 +34,7 @@ export function DeploymentDetailPage() {
     enabled: !!id,
     refetchInterval: (query) => {
       const d = query.state.data;
-      return d && ['pending', 'planning', 'applying', 'destroying', 'dispatched', 'running'].includes(d.status) ? 2000 : false;
+      return d && ['pending', 'planning', 'applying', 'destroying', 'rolling_back', 'dispatched', 'running'].includes(d.status) ? 2000 : false;
     },
   });
 
@@ -40,7 +42,7 @@ export function DeploymentDetailPage() {
     if (!id || !deployment) return;
     // Skip SSE for GitHub deployments (logs come from GitHub)
     if (deployment.executionMethod === 'github') return;
-    if (!['planning', 'applying', 'destroying'].includes(deployment.status)) return;
+    if (!['planning', 'applying', 'destroying', 'rolling_back'].includes(deployment.status)) return;
 
     const es = deploymentsApi.getLogs(id);
     es.onmessage = (event) => {
@@ -71,11 +73,29 @@ export function DeploymentDetailPage() {
     }
   };
 
+  const handleRollback = async () => {
+    if (!confirm('Are you sure you want to roll back this deployment? This will tear down the infrastructure.')) return;
+    setRollingBack(true);
+    try {
+      await deploymentsApi.rollback(id!);
+      toast.success('Rollback initiated');
+      queryClient.invalidateQueries({ queryKey: ['deployment', id] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Rollback failed');
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   if (isLoading || !deployment) {
     return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
   }
 
   const canDestroy = deployment.status === 'succeeded' &&
+    hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) &&
+    (user?.role?.name === 'Admin' || deployment.createdById === user?.id);
+
+  const canRollback = deployment.status === 'succeeded' &&
     hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) &&
     (user?.role?.name === 'Admin' || deployment.createdById === user?.id);
 
@@ -91,11 +111,18 @@ export function DeploymentDetailPage() {
             <Badge variant={statusVariant(deployment.status)}>{deployment.status}</Badge>
           </div>
         </div>
-        {canDestroy && (
-          <Button variant="danger" onClick={handleDestroy} loading={destroying}>
-            <Trash2 className="w-4 h-4 mr-2" /> Destroy
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canRollback && (
+            <Button variant="secondary" onClick={handleRollback} loading={rollingBack}>
+              <RotateCcw className="w-4 h-4 mr-2" /> Rollback
+            </Button>
+          )}
+          {canDestroy && (
+            <Button variant="danger" onClick={handleDestroy} loading={destroying}>
+              <Trash2 className="w-4 h-4 mr-2" /> Destroy
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -150,7 +177,7 @@ export function DeploymentDetailPage() {
           <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
             {deployment.planOutput && `--- PLAN ---\n${deployment.planOutput}\n\n`}
             {deployment.applyOutput && `--- APPLY ---\n${deployment.applyOutput}\n\n`}
-            {deployment.destroyOutput && `--- DESTROY ---\n${deployment.destroyOutput}\n\n`}
+            {deployment.destroyOutput && `--- ${['rolling_back', 'rolled_back'].includes(deployment.status) ? 'ROLLBACK' : 'DESTROY'} ---\n${deployment.destroyOutput}\n\n`}
             {logs.length > 0 && `--- LIVE ---\n${logs.join('\n')}`}
           </pre>
         </Card>

@@ -16,7 +16,7 @@ export function useDeployment(id: string | undefined) {
     enabled: !!id,
     refetchInterval: (query) => {
       const d = query.state.data;
-      return d && ['pending', 'planning', 'applying', 'destroying'].includes(d.status) ? 2000 : false;
+      return d && ['pending', 'planning', 'applying', 'destroying', 'rolling_back'].includes(d.status) ? 2000 : false;
     },
   });
 }
