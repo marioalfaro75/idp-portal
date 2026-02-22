@@ -25,7 +25,7 @@ resource "azurerm_storage_account" "this" {
   account_replication_type        = var.replication_type
   account_kind                    = var.account_kind
   access_tier                     = var.access_tier
-  enable_https_traffic_only       = true
+  https_traffic_only_enabled      = true
   min_tls_version                 = var.min_tls_version
   allow_nested_items_to_be_public = var.allow_public_access
   tags                            = var.tags

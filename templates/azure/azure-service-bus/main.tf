@@ -1,7 +1,8 @@
 terraform {
   required_providers {
     azurerm = {
-      source = "hashicorp/azurerm"
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
     }
   }
 }
@@ -34,5 +35,5 @@ resource "azurerm_servicebus_queue" "this" {
   default_message_ttl                  = var.message_ttl
   lock_duration                        = var.lock_duration
   dead_lettering_on_message_expiration = true
-  enable_partitioning                  = var.enable_partitioning
+  partitioning_enabled                 = var.enable_partitioning
 }

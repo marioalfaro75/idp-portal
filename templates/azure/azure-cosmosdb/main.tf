@@ -23,8 +23,8 @@ resource "azurerm_cosmosdb_account" "this" {
   resource_group_name       = azurerm_resource_group.this.name
   offer_type                = "Standard"
   kind                      = var.kind
-  enable_automatic_failover = var.enable_automatic_failover
-  enable_free_tier          = var.enable_free_tier
+  automatic_failover_enabled = var.enable_automatic_failover
+  free_tier_enabled          = var.enable_free_tier
   tags                      = var.tags
 
   consistency_policy {
