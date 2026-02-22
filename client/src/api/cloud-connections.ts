@@ -7,5 +7,6 @@ export const cloudConnectionsApi = {
   create: (data: CreateCloudConnectionRequest) => api.post<CloudConnection>('/cloud-connections', data).then((r) => r.data),
   update: (id: string, data: UpdateCloudConnectionRequest) => api.put<CloudConnection>(`/cloud-connections/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/cloud-connections/${id}`).then((r) => r.data),
+  test: (data: CreateCloudConnectionRequest) => api.post<{ valid: boolean; message: string; accountId: string }>('/cloud-connections/test', data).then((r) => r.data),
   validate: (id: string) => api.post<{ valid: boolean; message: string }>(`/cloud-connections/${id}/validate`).then((r) => r.data),
 };

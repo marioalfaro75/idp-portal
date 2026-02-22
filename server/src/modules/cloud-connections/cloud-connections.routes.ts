@@ -21,6 +21,11 @@ router.get('/:id', authorize(PERMISSIONS.CLOUD_CONNECTIONS_LIST), asyncHandler(a
   res.json(connection);
 }));
 
+router.post('/test', authorize(PERMISSIONS.CLOUD_CONNECTIONS_CREATE), validate(createCloudConnectionSchema), asyncHandler(async (req, res) => {
+  const result = await service.testCredentials(req.body.provider, req.body.credentials as Record<string, unknown>);
+  res.json(result);
+}));
+
 router.post('/', authorize(PERMISSIONS.CLOUD_CONNECTIONS_CREATE), validate(createCloudConnectionSchema), asyncHandler(async (req, res) => {
   const connection = await service.create(req.body, req.user!.sub);
   await auditService.log({ action: 'create', resource: 'cloud_connection', resourceId: connection.id, userId: req.user!.sub, ipAddress: req.ip });

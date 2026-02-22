@@ -42,6 +42,10 @@ export async function get(id: string) {
   return formatConnection(conn);
 }
 
+export async function testCredentials(provider: string, credentials: Record<string, unknown>) {
+  return validateCredentials(provider, credentials);
+}
+
 export async function create(data: CreateCloudConnectionRequest, userId: string) {
   const creds = data.credentials as unknown as Record<string, unknown>;
   const encrypted = encryptCredentials(creds);
