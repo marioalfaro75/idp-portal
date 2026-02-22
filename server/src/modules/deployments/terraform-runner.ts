@@ -5,8 +5,25 @@ import os from 'os';
 import { logger } from '../../utils/logger';
 import type { TemplateVariable } from '@idp/shared';
 import { generateTfvarsJson } from '../../utils/tfvars';
+import * as settingsService from '../settings/settings.service';
 
-const TERRAFORM_BIN = process.env.TERRAFORM_BIN || 'terraform';
+let cachedBin: string | null = null;
+let cacheExpiry = 0;
+
+export async function getTerraformBin(): Promise<string> {
+  const now = Date.now();
+  if (cachedBin && now < cacheExpiry) return cachedBin;
+
+  const dbValue = await settingsService.get('terraform.bin');
+  cachedBin = dbValue || process.env.TERRAFORM_BIN || 'terraform';
+  cacheExpiry = now + 10_000;
+  return cachedBin;
+}
+
+export function clearTerraformBinCache(): void {
+  cachedBin = null;
+  cacheExpiry = 0;
+}
 
 export interface TerraformResult {
   success: boolean;
@@ -18,7 +35,8 @@ export interface TerraformResult {
 type LogCallback = (message: string) => void;
 
 export async function checkTerraformAvailable(): Promise<{ available: boolean; version?: string }> {
-  const result = await runCommand(TERRAFORM_BIN, ['--version'], process.cwd(), {});
+  const bin = await getTerraformBin();
+  const result = await runCommand(bin, ['--version'], process.cwd(), {});
   if (result.code === 0) {
     const match = result.stdout.match(/Terraform v([\d.]+)/);
     return { available: true, version: match?.[1] };
@@ -107,10 +125,11 @@ export async function plan(
   fs.writeFileSync(path.join(workDir, 'terraform.tfvars.json'), tfvarsJson);
 
   const env = buildEnvVars(provider, credentials);
+  const bin = await getTerraformBin();
 
   // Init
   onLog?.('Running terraform init...\n');
-  const initResult = await runCommand(TERRAFORM_BIN, ['init', '-no-color'], workDir, env, onLog);
+  const initResult = await runCommand(bin, ['init', '-no-color'], workDir, env, onLog);
   if (initResult.code !== 0) {
     cleanup(workDir);
     return { success: false, output: initResult.stdout + '\n' + initResult.stderr };
@@ -118,7 +137,7 @@ export async function plan(
 
   // Plan
   onLog?.('\nRunning terraform plan...\n');
-  const planResult = await runCommand(TERRAFORM_BIN, ['plan', '-no-color', '-out=tfplan'], workDir, env, onLog);
+  const planResult = await runCommand(bin, ['plan', '-no-color', '-out=tfplan'], workDir, env, onLog);
 
   cleanup(workDir);
   return {
@@ -153,23 +172,24 @@ export async function apply(
   }
 
   const env = buildEnvVars(provider, credentials);
+  const bin = await getTerraformBin();
 
   onLog?.('Running terraform init...\n');
-  const initResult = await runCommand(TERRAFORM_BIN, ['init', '-no-color'], workDir, env, onLog);
+  const initResult = await runCommand(bin, ['init', '-no-color'], workDir, env, onLog);
   if (initResult.code !== 0) {
     cleanup(workDir);
     return { success: false, output: initResult.stdout + '\n' + initResult.stderr };
   }
 
   onLog?.('\nRunning terraform apply...\n');
-  const applyResult = await runCommand(TERRAFORM_BIN, ['apply', '-auto-approve', '-no-color'], workDir, env, onLog);
+  const applyResult = await runCommand(bin, ['apply', '-auto-approve', '-no-color'], workDir, env, onLog);
 
   let outputs: Record<string, string> = {};
   let state: string | undefined;
 
   if (applyResult.code === 0) {
     // Get outputs
-    const outputResult = await runCommand(TERRAFORM_BIN, ['output', '-json', '-no-color'], workDir, env);
+    const outputResult = await runCommand(bin, ['output', '-json', '-no-color'], workDir, env);
     try {
       const parsed = JSON.parse(outputResult.stdout);
       outputs = Object.fromEntries(
@@ -216,16 +236,17 @@ export async function destroy(
   fs.writeFileSync(path.join(workDir, 'terraform.tfstate'), terraformState);
 
   const env = buildEnvVars(provider, credentials);
+  const bin = await getTerraformBin();
 
   onLog?.('Running terraform init...\n');
-  const initResult = await runCommand(TERRAFORM_BIN, ['init', '-no-color'], workDir, env, onLog);
+  const initResult = await runCommand(bin, ['init', '-no-color'], workDir, env, onLog);
   if (initResult.code !== 0) {
     cleanup(workDir);
     return { success: false, output: initResult.stdout + '\n' + initResult.stderr };
   }
 
   onLog?.('\nRunning terraform destroy...\n');
-  const destroyResult = await runCommand(TERRAFORM_BIN, ['destroy', '-auto-approve', '-no-color'], workDir, env, onLog);
+  const destroyResult = await runCommand(bin, ['destroy', '-auto-approve', '-no-color'], workDir, env, onLog);
 
   cleanup(workDir);
   return {

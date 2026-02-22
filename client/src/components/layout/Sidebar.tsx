@@ -4,7 +4,7 @@ import { useUiStore } from '../../stores/ui-store';
 import { PERMISSIONS } from '@idp/shared';
 import {
   LayoutDashboard, Layers, Rocket, Cloud, GitBranch,
-  Users, UsersRound, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box,
+  Users, UsersRound, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box, Terminal,
 } from 'lucide-react';
 
 const navItems = [
@@ -19,6 +19,7 @@ const navItems = [
   { to: '/admin/groups', label: 'Groups', icon: UsersRound, permission: PERMISSIONS.GROUPS_MANAGE },
   { to: '/admin/audit-log', label: 'Audit Log', icon: FileText, permission: PERMISSIONS.AUDIT_LOGS_VIEW },
   { to: '/admin/settings', label: 'Settings', icon: Settings, permission: PERMISSIONS.SETTINGS_MANAGE },
+  { to: '/admin/terraform', label: 'Terraform', icon: Terminal, permission: PERMISSIONS.SETTINGS_MANAGE },
 ];
 
 export function Sidebar() {
