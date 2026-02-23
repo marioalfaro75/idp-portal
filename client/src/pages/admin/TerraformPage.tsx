@@ -7,7 +7,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Badge } from '../../components/ui/Badge';
 import toast from 'react-hot-toast';
-import { RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 const sourceLabels: Record<TerraformStatus['source'], string> = {
   'system-setting': 'Managed by IDP',
@@ -19,6 +19,7 @@ export function TerraformPage() {
   const queryClient = useQueryClient();
   const [selectedVersion, setSelectedVersion] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState('');
   const [customPath, setCustomPath] = useState('');
   const [savingPath, setSavingPath] = useState(false);
   const [pathError, setPathError] = useState('');
@@ -39,12 +40,23 @@ export function TerraformPage() {
     const version = selectedVersion || versions[0];
     if (!version) return;
     setInstalling(true);
+    setInstallError('');
     try {
       await settingsApi.terraformInstall(version);
       toast.success(`Terraform ${version} installed successfully`);
       queryClient.invalidateQueries({ queryKey: ['terraform-status'] });
     } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Installation failed');
+      let message: string;
+      if (err.response?.data?.error?.message) {
+        message = err.response.data.error.message;
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        message = 'Request timed out — the download may be taking too long. Try again or use a custom binary path instead.';
+      } else if (!err.response) {
+        message = 'Could not reach the server. Check that the backend is running.';
+      } else {
+        message = `Installation failed (HTTP ${err.response.status})`;
+      }
+      setInstallError(message);
     } finally {
       setInstalling(false);
     }
@@ -120,7 +132,7 @@ export function TerraformPage() {
             label="Version"
             options={versions.map((v) => ({ value: v, label: `v${v}${v === versions[0] ? ' (latest)' : ''}` }))}
             value={selectedVersion}
-            onChange={(e) => setSelectedVersion(e.target.value)}
+            onChange={(e) => { setSelectedVersion(e.target.value); setInstallError(''); }}
             disabled={versionsLoading}
           />
           <Button
@@ -130,6 +142,12 @@ export function TerraformPage() {
           >
             {installing ? 'Installing...' : 'Download & Install'}
           </Button>
+          {installError && (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-700 dark:text-red-300">{installError}</p>
+            </div>
+          )}
         </div>
       </Card>
 
