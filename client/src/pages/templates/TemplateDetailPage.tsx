@@ -10,6 +10,11 @@ import { PERMISSIONS } from '@idp/shared';
 import { ArrowLeft, Rocket, Box, Pencil, X, Plus, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+function formatTypeLabel(tfType: string): string {
+  // Collapse inner object definitions: list(object({...})) → list(object)
+  return tfType.replace(/\(\s*\{[\s\S]*\}\s*\)/g, '');
+}
+
 export function TemplateDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { hasPermission } = useAuthStore();
@@ -122,7 +127,7 @@ export function TemplateDetailPage() {
                   <div className="flex items-center justify-between">
                     <code className="text-sm font-semibold text-primary-700 dark:text-primary-400">{v.name}</code>
                     <div className="flex gap-2">
-                      <Badge variant="default">{v.type}</Badge>
+                      <Badge variant="default" title={v.type !== formatTypeLabel(v.type) ? v.type : undefined}>{formatTypeLabel(v.type)}</Badge>
                       {v.required && <Badge variant="danger">required</Badge>}
                     </div>
                   </div>
