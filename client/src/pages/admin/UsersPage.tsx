@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '../../api/users';
 import { rolesApi } from '../../api/roles';
@@ -10,7 +10,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import type { User } from '@idp/shared';
-import { Plus, Trash2, Edit } from 'lucide-react';
+import { Plus, Trash2, Edit, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function UsersPage() {
@@ -20,9 +20,23 @@ export function UsersPage() {
   const [loading, setLoading] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ displayName: '', email: '', roleId: '', isActive: true, password: '' });
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ['users'], queryFn: usersApi.list });
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: rolesApi.list });
+
+  const filteredUsers = useMemo(() => {
+    const q = search.toLowerCase();
+    return users.filter((u) => {
+      if (q && !u.displayName.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
+      if (roleFilter && u.role?.id !== roleFilter) return false;
+      if (statusFilter === 'active' && !u.isActive) return false;
+      if (statusFilter === 'disabled' && u.isActive) return false;
+      return true;
+    });
+  }, [users, search, roleFilter, statusFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +127,22 @@ export function UsersPage() {
         <h1 className="text-2xl font-bold">Users</h1>
         <Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-2" /> Add User</Button>
       </div>
-      <Card>{isLoading ? <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div> : <Table columns={columns} data={users} />}</Card>
+      <Card>
+        <div className="flex flex-wrap gap-4 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100"
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select options={roles.map((r) => ({ value: r.id, label: r.name }))} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="w-48" />
+          <Select options={[{ value: 'active', label: 'Active' }, { value: 'disabled', label: 'Disabled' }]} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-48" />
+        </div>
+        {isLoading ? <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div> : <Table columns={columns} data={filteredUsers} />}
+      </Card>
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add User">
         <form onSubmit={handleCreate} className="space-y-4">
           <Input label="Display Name" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} required />

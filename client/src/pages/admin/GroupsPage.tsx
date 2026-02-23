@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { groupsApi } from '../../api/groups';
 import { usersApi } from '../../api/users';
@@ -10,7 +10,7 @@ import { Table } from '../../components/ui/Table';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import type { Group } from '@idp/shared';
-import { Plus, Trash2, Edit, Users, Layers } from 'lucide-react';
+import { Plus, Trash2, Edit, Users, Layers, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Template {
@@ -29,8 +29,17 @@ export function GroupsPage() {
   const [editForm, setEditForm] = useState({ name: '', description: '' });
   const [membersGroup, setMembersGroup] = useState<Group | null>(null);
   const [templatesGroup, setTemplatesGroup] = useState<Group | null>(null);
+  const [search, setSearch] = useState('');
 
   const { data: groups = [], isLoading } = useQuery({ queryKey: ['groups'], queryFn: groupsApi.list });
+
+  const filteredGroups = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) =>
+      g.name.toLowerCase().includes(q) || (g.description || '').toLowerCase().includes(q)
+    );
+  }, [groups, search]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +120,20 @@ export function GroupsPage() {
         <h1 className="text-2xl font-bold">Groups</h1>
         <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4 mr-2" /> Create Group</Button>
       </div>
-      <Card>{isLoading ? <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div> : <Table columns={columns} data={groups} />}</Card>
+      <Card>
+        <div className="flex flex-wrap gap-4 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100"
+              placeholder="Search by name or description..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+        {isLoading ? <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div> : <Table columns={columns} data={filteredGroups} />}
+      </Card>
 
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Group">

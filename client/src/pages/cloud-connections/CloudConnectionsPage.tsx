@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { cloudConnectionsApi } from '../../api/cloud-connections';
 import { Card } from '../../components/ui/Card';
@@ -11,7 +11,7 @@ import { Select } from '../../components/ui/Select';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS, CLOUD_PROVIDERS } from '@idp/shared';
 import type { CloudConnection } from '@idp/shared';
-import { Plus, Trash2, CheckCircle, Cloud, Layers, Rocket, Info, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, Cloud, Layers, Rocket, Info, ExternalLink, AlertTriangle, Search } from 'lucide-react';
 import { timeAgo } from '../../utils/time';
 import toast from 'react-hot-toast';
 
@@ -107,8 +107,21 @@ export function CloudConnectionsPage() {
   const [form, setForm] = useState({ name: '', provider: '', accessKeyId: '', secretAccessKey: '', region: '', projectId: '', serviceAccountKey: '', subscriptionId: '', tenantId: '', clientId: '', clientSecret: '' });
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [providerFilter, setProviderFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const { data: connections = [], isLoading } = useQuery({ queryKey: ['cloudConnections'], queryFn: cloudConnectionsApi.list });
+
+  const filteredConnections = useMemo(() => {
+    const q = search.toLowerCase();
+    return connections.filter((c) => {
+      if (q && !c.name.toLowerCase().includes(q)) return false;
+      if (providerFilter && c.provider !== providerFilter) return false;
+      if (statusFilter && c.status !== statusFilter) return false;
+      return true;
+    });
+  }, [connections, search, providerFilter, statusFilter]);
 
   const buildCredentials = () => {
     if (form.provider === 'aws') return { accessKeyId: form.accessKeyId, secretAccessKey: form.secretAccessKey, region: form.region };
@@ -310,8 +323,21 @@ export function CloudConnectionsPage() {
       )}
 
       <Card>
+        <div className="flex flex-wrap gap-4 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100"
+              placeholder="Search by name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select options={CLOUD_PROVIDERS.map((p) => ({ value: p.value, label: p.label }))} value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="w-48" />
+          <Select options={[{ value: 'connected', label: 'Connected' }, { value: 'error', label: 'Error' }, { value: 'pending', label: 'Pending' }]} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-48" />
+        </div>
         {isLoading ? <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>
-          : <Table columns={columns} data={connections} emptyMessage="No cloud connections configured" />}
+          : <Table columns={columns} data={filteredConnections} emptyMessage="No cloud connections configured" />}
       </Card>
 
       <Modal open={showAdd} onClose={() => { setShowAdd(false); setValidationError(null); }} title="Add Cloud Connection" size="lg">
