@@ -107,6 +107,23 @@ async function fetchRunLogs(
   }
 }
 
+function extractTerraformOutputs(logText: string): Record<string, string> | null {
+  // Match the "Outputs:" section printed after terraform apply
+  const outputsMatch = logText.match(/Outputs:\s*\n([\s\S]*?)(?:\n\n|\n(?:=== |--- )|$)/);
+  if (!outputsMatch) return null;
+
+  const outputs: Record<string, string> = {};
+  // Each output line: key = "value" or key = value
+  const lines = outputsMatch[1].split('\n');
+  for (const line of lines) {
+    const m = line.match(/^\s*(\w+)\s*=\s*"?(.*?)"?\s*$/);
+    if (m && m[1] && m[2] !== undefined) {
+      outputs[m[1]] = m[2];
+    }
+  }
+  return Object.keys(outputs).length > 0 ? outputs : null;
+}
+
 function createLogCollector(deploymentId: string): { messages: string[]; attach: () => void; detach: () => void } {
   const emitter = getLogEmitter(deploymentId);
   const messages: string[] = [];
@@ -669,6 +686,14 @@ export async function pollGitHubDeployments(): Promise<void> {
 
             if (run.status === 'completed' && logData.logs) {
               updateData[outputField] = logData.logs;
+
+              // Extract Terraform outputs from logs on successful apply
+              if (newStatus === 'succeeded') {
+                const parsedOutputs = extractTerraformOutputs(logData.logs);
+                if (parsedOutputs) {
+                  updateData.outputs = JSON.stringify(parsedOutputs);
+                }
+              }
             }
 
             if (newStatus === 'failed') {

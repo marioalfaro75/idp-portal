@@ -7,7 +7,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/auth-store';
 import { PERMISSIONS } from '@idp/shared';
-import { ArrowLeft, Trash2, RotateCcw, ExternalLink, AlertTriangle, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Trash2, RotateCcw, ExternalLink, AlertTriangle, ChevronDown, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function extractErrorSummary(errorMessage: string): { summary: string; hasDetails: boolean } {
@@ -39,6 +39,7 @@ export function DeploymentDetailPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [destroying, setDestroying] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
+  const [logsCopied, setLogsCopied] = useState(false);
 
   const { data: deployment, isLoading } = useQuery({
     queryKey: ['deployment', id],
@@ -212,8 +213,26 @@ export function DeploymentDetailPage() {
         const planLabel = isGitHub ? '--- SETUP ---' : '--- PLAN ---';
         const applyLabel = isGitHub ? '--- WORKFLOW RUN ---' : '--- APPLY ---';
         const logTitle = isGitHub ? 'GitHub Actions Logs' : 'Logs';
+        const buildLogsText = () => {
+          let text = '';
+          if (deployment.planOutput) text += `${planLabel}\n${deployment.planOutput}\n\n`;
+          if (deployment.applyOutput) text += `${applyLabel}\n${deployment.applyOutput}\n\n`;
+          if (deployment.destroyOutput) text += `--- ${['rolling_back', 'rolled_back'].includes(deployment.status) ? 'ROLLBACK' : 'DESTROY'} ---\n${deployment.destroyOutput}\n\n`;
+          if (logs.length > 0) text += `--- LIVE ---\n${logs.join('\n')}`;
+          return text;
+        };
+        const handleCopyLogs = () => {
+          navigator.clipboard.writeText(buildLogsText()).then(() => {
+            setLogsCopied(true);
+            setTimeout(() => setLogsCopied(false), 2000);
+          });
+        };
         return (
-          <Card title={logTitle}>
+          <Card title={logTitle} actions={
+            <button onClick={handleCopyLogs} className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+              {logsCopied ? <><Check className="w-4 h-4 text-green-500" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy Logs</>}
+            </button>
+          }>
             <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
               {deployment.planOutput && `${planLabel}\n${deployment.planOutput}\n\n`}
               {deployment.applyOutput && `${applyLabel}\n${deployment.applyOutput}\n\n`}

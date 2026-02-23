@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type { TemplateVariable } from '@idp/shared';
-import { getBaseType, parseContainsValidation, validateVariables } from '@idp/shared';
+import { getBaseType, parseContainsValidation, validateVariables, generateTypeExample } from '@idp/shared';
 
 interface DynamicFormProps {
   variables: TemplateVariable[];
@@ -113,9 +113,10 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
 
         // Complex types (list(object), map, object) → textarea
         if (baseType === 'map' || baseType === 'object' || (baseType === 'list' && !v.type.match(/^list\(string\)$/i))) {
-          const placeholder = baseType === 'list'
-            ? '[{"key": "value"}]'
-            : '{"key": "value"}';
+          const typeExample = generateTypeExample(v.type);
+          const placeholder = typeExample
+            || (baseType === 'list' ? '[{"key": "value"}]' : '{"key": "value"}');
+          const rows = Math.min(10, Math.max(3, placeholder.split('\n').length));
           return (
             <div key={v.name}>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -123,7 +124,7 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
               </label>
               <textarea
                 className={`block w-full rounded-lg border ${fieldError ? 'border-red-300' : 'border-gray-300 dark:border-gray-600'} px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100 dark:focus:border-primary-400 font-mono`}
-                rows={3}
+                rows={rows}
                 placeholder={v.default || placeholder}
                 value={values[v.name] || ''}
                 onChange={(e) => handleChange(v.name, e.target.value)}

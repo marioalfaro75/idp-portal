@@ -112,6 +112,52 @@ export function validateVariables(
 }
 
 /**
+ * Generate an example JSON string from a Terraform type definition.
+ * e.g. "list(object({id = string, enabled = bool}))" → '[{"id": "", "enabled": false}]'
+ */
+export function generateTypeExample(tfType: string): string | null {
+  const t = tfType.trim();
+
+  // list(object({...})) or set(object({...}))
+  const listObjMatch = t.match(/^(?:list|set)\s*\(\s*object\s*\(\s*\{([\s\S]*)\}\s*\)\s*\)$/);
+  if (listObjMatch) {
+    const obj = parseObjectFields(listObjMatch[1]);
+    if (obj) return JSON.stringify([obj], null, 2);
+  }
+
+  // object({...})
+  const objMatch = t.match(/^object\s*\(\s*\{([\s\S]*)\}\s*\)$/);
+  if (objMatch) {
+    const obj = parseObjectFields(objMatch[1]);
+    if (obj) return JSON.stringify(obj, null, 2);
+  }
+
+  return null;
+}
+
+function parseObjectFields(fieldsStr: string): Record<string, unknown> | null {
+  const fields: Record<string, unknown> = {};
+  // Match field = type patterns, handling nested types
+  const lines = fieldsStr.split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const m = line.match(/^(\w+)\s*=\s*(.+?)$/);
+    if (!m) continue;
+    const [, name, rawType] = m;
+    fields[name] = defaultForType(rawType.trim());
+  }
+  return Object.keys(fields).length > 0 ? fields : null;
+}
+
+function defaultForType(t: string): unknown {
+  if (t === 'string') return '';
+  if (t === 'number') return 0;
+  if (t === 'bool') return false;
+  if (t.startsWith('list')) return [];
+  if (t.startsWith('map')) return {};
+  return '';
+}
+
+/**
  * Convert a string value to a properly typed value for Terraform tfvars.
  */
 export function coerceVariableValue(value: string, tfType: string): unknown {

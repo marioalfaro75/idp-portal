@@ -132,12 +132,35 @@ function extractField(block: string, field: string): string | undefined {
   const match = block.match(regex);
   if (match) return match[1];
 
-  // Try unquoted value
-  const regex2 = new RegExp(`${field}\\s*=\\s*([^\\s\\n]+)`, 'm');
-  const match2 = block.match(regex2);
-  if (match2) return match2[1];
+  // Try unquoted value — for complex types like list(object({...})),
+  // use bracket matching to capture the full multi-line definition
+  const startRegex = new RegExp(`${field}\\s*=\\s*`, 'm');
+  const startMatch = startRegex.exec(block);
+  if (!startMatch) return undefined;
 
-  return undefined;
+  const valueStart = startMatch.index + startMatch[0].length;
+  const firstChar = block[valueStart];
+
+  // Simple unquoted value (bool, number, simple keyword)
+  if (firstChar !== 'l' && firstChar !== 's' && firstChar !== 'o' && firstChar !== 'm'
+    || !block.substring(valueStart).match(/^(?:list|set|object|map)\s*\(/)) {
+    const simpleMatch = block.substring(valueStart).match(/^([^\s\n]+)/);
+    return simpleMatch ? simpleMatch[1] : undefined;
+  }
+
+  // Complex type — count brackets/parens to find the end
+  let depth = 0;
+  let i = valueStart;
+  for (; i < block.length; i++) {
+    const ch = block[i];
+    if (ch === '(' || ch === '{' || ch === '[') depth++;
+    else if (ch === ')' || ch === '}' || ch === ']') {
+      depth--;
+      if (depth === 0) { i++; break; }
+    }
+  }
+  const extracted = block.substring(valueStart, i).trim();
+  return extracted || undefined;
 }
 
 export function readScaffoldFiles(
