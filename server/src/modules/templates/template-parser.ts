@@ -82,13 +82,7 @@ function parseVariables(templateDir: string): TemplateVariable[] {
   const content = fs.readFileSync(variablesPath, 'utf-8');
   const variables: TemplateVariable[] = [];
 
-  const varRegex = /variable\s+"([^"]+)"\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
-  let match;
-
-  while ((match = varRegex.exec(content)) !== null) {
-    const name = match[1];
-    const block = match[2];
-
+  for (const { name, block } of extractBlocks(content, 'variable')) {
     const type = extractField(block, 'type') || 'string';
     const description = extractField(block, 'description') || '';
     const defaultValue = extractField(block, 'default');
@@ -114,17 +108,39 @@ function parseOutputs(templateDir: string): TemplateOutput[] {
   const content = fs.readFileSync(outputsPath, 'utf-8');
   const outputs: TemplateOutput[] = [];
 
-  const outRegex = /output\s+"([^"]+)"\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
-  let match;
-
-  while ((match = outRegex.exec(content)) !== null) {
-    const name = match[1];
-    const block = match[2];
+  for (const { name, block } of extractBlocks(content, 'output')) {
     const description = extractField(block, 'description') || '';
     outputs.push({ name, description });
   }
 
   return outputs;
+}
+
+/**
+ * Extract named blocks (variable "name" {...} or output "name" {...})
+ * using bracket-depth tracking to handle arbitrary nesting.
+ */
+function extractBlocks(content: string, keyword: string): { name: string; block: string }[] {
+  const results: { name: string; block: string }[] = [];
+  const pattern = new RegExp(`${keyword}\\s+"([^"]+)"\\s*\\{`, 'g');
+  let match;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const name = match[1];
+    const blockStart = match.index + match[0].length;
+    let depth = 1;
+    let i = blockStart;
+    for (; i < content.length; i++) {
+      if (content[i] === '{') depth++;
+      else if (content[i] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    results.push({ name, block: content.substring(blockStart, i) });
+  }
+
+  return results;
 }
 
 function extractField(block: string, field: string): string | undefined {

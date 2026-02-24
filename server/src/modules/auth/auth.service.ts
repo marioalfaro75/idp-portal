@@ -13,7 +13,7 @@ function generateToken(user: { id: string; email: string }, role: { name: string
   const token = jwt.sign(
     { sub: user.id, email: user.email, role: role.name, permissions, jti },
     process.env.JWT_SECRET!,
-    { expiresIn },
+    { expiresIn } as jwt.SignOptions,
   );
 
   const decoded = jwt.decode(token) as JwtPayload;

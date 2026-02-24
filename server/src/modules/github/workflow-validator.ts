@@ -140,7 +140,7 @@ export function fixSetupTerraformWrapper(content: string): { fixed: string; chan
 
     // Match `uses: hashicorp/setup-terraform` — either inline with `-` or as a property
     const inlineMatch = line.match(/^(\s*)-\s*uses:\s*hashicorp\/setup-terraform/);
-    const propMatch = !inlineMatch && line.match(/^(\s*)uses:\s*hashicorp\/setup-terraform/);
+    const propMatch = !inlineMatch ? line.match(/^(\s*)uses:\s*hashicorp\/setup-terraform/) : null;
 
     if (!inlineMatch && !propMatch) {
       result.push(line);

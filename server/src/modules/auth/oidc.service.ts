@@ -114,7 +114,7 @@ export async function handleCallback(code: string): Promise<{ token: string; use
   const jwtToken = jwt.sign(
     { sub: user.id, email: user.email, role: user.role.name, permissions, jti },
     process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' },
+    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' } as jwt.SignOptions,
   );
 
   const decoded = jwt.decode(jwtToken) as any;
