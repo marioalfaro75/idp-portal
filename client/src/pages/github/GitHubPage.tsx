@@ -393,7 +393,7 @@ export function GitHubPage() {
           </div>
 
           {/* Repo list */}
-          <div className="divide-y dark:divide-gray-700 max-h-[32rem] overflow-y-auto">
+          <div className="divide-y dark:divide-gray-700 max-h-[32rem] overflow-y-auto table-scroll">
             {filteredRepos.map((repo) => {
               const [owner, name] = repo.fullName.split('/');
               return (
