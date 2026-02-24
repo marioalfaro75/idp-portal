@@ -394,23 +394,29 @@ export function GitHubPage() {
 
           {/* Repo list */}
           <div className="divide-y dark:divide-gray-700 max-h-[32rem] overflow-y-auto">
-            {filteredRepos.map((repo) => (
-              <div key={repo.id} className="py-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <GitBranch className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 hover:underline truncate">
-                    {repo.fullName} <ExternalLink className="w-3 h-3 inline" />
-                  </a>
-                  {repo.private && <Badge variant="warning">private</Badge>}
-                  {repo.language && <Badge variant="info">{repo.language}</Badge>}
-                  {activeRepoSlugs.has(repo.fullName) && <Badge variant="success">in use</Badge>}
+            {filteredRepos.map((repo) => {
+              const [owner, name] = repo.fullName.split('/');
+              return (
+                <div key={repo.id} className="group py-3">
+                  <div className="flex items-center gap-2">
+                    <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 min-w-0 shrink">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">{owner} /</span>
+                      <span className="font-medium text-primary-600 dark:text-primary-400 hover:underline truncate">{name}</span>
+                      <ExternalLink className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    </a>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {repo.private && <Badge variant="warning">private</Badge>}
+                      {repo.language && <Badge variant="info">{repo.language}</Badge>}
+                      {activeRepoSlugs.has(repo.fullName) && <Badge variant="success">in use</Badge>}
+                    </div>
+                    {repo.updatedAt && <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{timeAgo(repo.updatedAt)}</span>}
+                  </div>
+                  {repo.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 pl-0">{repo.description}</p>
+                  )}
                 </div>
-                <div className="ml-6 flex items-center gap-2">
-                  {repo.description && <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{repo.description}</p>}
-                  {repo.updatedAt && <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{timeAgo(repo.updatedAt)}</span>}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {filteredRepos.length === 0 && repos.length > 0 && (
               <p className="text-gray-500 dark:text-gray-400 py-4 text-center">No repositories match your filters</p>
             )}
