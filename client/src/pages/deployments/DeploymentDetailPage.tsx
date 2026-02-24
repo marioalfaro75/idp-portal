@@ -200,7 +200,7 @@ export function DeploymentDetailPage() {
                   <summary className="text-sm text-red-600 dark:text-red-400 cursor-pointer hover:underline inline-flex items-center gap-1">
                     <ChevronDown className="w-3 h-3" /> Full error details
                   </summary>
-                  <pre className="mt-2 text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap bg-red-100 dark:bg-red-900/30 p-3 rounded max-h-64 overflow-y-auto">{deployment.errorMessage}</pre>
+                  <pre className="mt-2 text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap bg-red-100 dark:bg-red-900/30 p-3 rounded max-h-64 overflow-y-auto table-scroll">{deployment.errorMessage}</pre>
                 </details>
               )}
             </div>
@@ -233,7 +233,7 @@ export function DeploymentDetailPage() {
               {logsCopied ? <><Check className="w-4 h-4 text-green-500" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy Logs</>}
             </button>
           }>
-            <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
+            <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto table-scroll whitespace-pre-wrap font-mono">
               {deployment.planOutput && `${planLabel}\n${deployment.planOutput}\n\n`}
               {deployment.applyOutput && `${applyLabel}\n${deployment.applyOutput}\n\n`}
               {deployment.destroyOutput && `--- ${['rolling_back', 'rolled_back'].includes(deployment.status) ? 'ROLLBACK' : 'DESTROY'} ---\n${deployment.destroyOutput}\n\n`}

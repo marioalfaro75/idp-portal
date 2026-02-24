@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type { TemplateVariable } from '@idp/shared';
@@ -13,6 +14,7 @@ interface DynamicFormProps {
 
 export function DynamicForm({ variables, values, onChange, errors = {} }: DynamicFormProps) {
   const [blurErrors, setBlurErrors] = useState<Record<string, string>>({});
+  const [expandedExamples, setExpandedExamples] = useState<Set<string>>(new Set());
 
   const handleBlur = useCallback((name: string) => {
     const fieldErrors = validateVariables(values, variables);
@@ -41,6 +43,15 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
   }, [onChange]);
 
   const mergedErrors = { ...blurErrors, ...errors };
+
+  const toggleExample = useCallback((name: string) => {
+    setExpandedExamples((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -113,10 +124,12 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
 
         // Complex types (list(object), map, object) → textarea
         if (baseType === 'map' || baseType === 'object' || (baseType === 'list' && !v.type.match(/^list\(string\)$/i))) {
-          const typeExample = generateTypeExample(v.type);
+          const typeExample = generateTypeExample(v.type, v.name);
           const placeholder = typeExample
             || (baseType === 'list' ? '[{"key": "value"}]' : '{"key": "value"}');
           const rows = Math.min(10, Math.max(3, placeholder.split('\n').length));
+          const isExpanded = expandedExamples.has(v.name);
+          const isEmpty = !values[v.name];
           return (
             <div key={v.name}>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -134,12 +147,43 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
               {v.description && (
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{v.description}</p>
               )}
+              {typeExample && (
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleExample(v.name)}
+                    className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    {isExpanded ? 'Hide example' : 'Show example'}
+                  </button>
+                  {isExpanded && (
+                    <div className="mt-1.5">
+                      <pre className="rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300 overflow-x-auto table-scroll">
+                        {typeExample}
+                      </pre>
+                      {isEmpty && (
+                        <button
+                          type="button"
+                          onClick={() => handleChange(v.name, typeExample)}
+                          className="mt-1.5 px-2.5 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/30"
+                        >
+                          Insert
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         }
 
         // list(string) → text input with comma hint
         if (baseType === 'list') {
+          const listExample = '["value1", "value2"]';
+          const isListExpanded = expandedExamples.has(v.name);
+          const isListEmpty = !values[v.name];
           return (
             <div key={v.name}>
               <Input
@@ -153,6 +197,35 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
               {v.description && (
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{v.description}</p>
               )}
+              <div className="mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => toggleExample(v.name)}
+                  className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  {isListExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  {isListExpanded ? 'Hide example' : 'Show example'}
+                </button>
+                {isListExpanded && (
+                  <div className="mt-1.5">
+                    <pre className="rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300 overflow-x-auto table-scroll">
+                      {listExample}
+                    </pre>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Comma-separated or JSON array format accepted
+                    </p>
+                    {isListEmpty && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange(v.name, listExample)}
+                        className="mt-1.5 px-2.5 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/30"
+                      >
+                        Insert
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           );
         }

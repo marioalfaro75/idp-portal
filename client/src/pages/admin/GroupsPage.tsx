@@ -252,7 +252,7 @@ function ManageMembersModal({ group, onClose, onSaved }: { group: Group; onClose
     <Modal open onClose={onClose} title={`Manage Members — ${group.name}`} size="lg">
       <div className="space-y-4">
         <Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <div className="max-h-80 overflow-y-auto border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700">
+        <div className="max-h-80 overflow-y-auto table-scroll border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700">
           {filtered.map((u) => (
             <label key={u.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
               <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id)} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
@@ -330,7 +330,7 @@ function ManageTemplatesModal({ group, onClose, onSaved }: { group: Group; onClo
     <Modal open onClose={onClose} title={`Manage Templates — ${group.name}`} size="lg">
       <div className="space-y-4">
         <Input placeholder="Search templates..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <div className="max-h-80 overflow-y-auto border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700">
+        <div className="max-h-80 overflow-y-auto table-scroll border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700">
           {filtered.map((t) => (
             <label key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
               <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggle(t.id)} className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
