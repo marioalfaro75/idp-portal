@@ -3,7 +3,7 @@ import { asyncHandler } from '../../utils/async-handler';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { authLimiter } from '../../middleware/rate-limiter';
-import { loginSchema, setupSchema } from '@idp/shared';
+import { loginSchema, setupSchema, changePasswordSchema } from '@idp/shared';
 import * as authService from './auth.service';
 import * as oidcService from './oidc.service';
 import * as auditService from '../audit/audit.service';
@@ -28,6 +28,11 @@ router.post('/logout', authenticate, asyncHandler(async (req, res) => {
 router.get('/me', authenticate, asyncHandler(async (req, res) => {
   const user = await authService.getMe(req.user!.sub);
   res.json(user);
+}));
+
+router.post('/change-password', authenticate, validate(changePasswordSchema), asyncHandler(async (req, res) => {
+  await authService.changePassword(req.user!.sub, req.body.currentPassword, req.body.newPassword);
+  res.json({ message: 'Password changed successfully' });
 }));
 
 router.get('/setup-status', asyncHandler(async (_req, res) => {

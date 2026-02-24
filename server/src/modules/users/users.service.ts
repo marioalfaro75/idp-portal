@@ -53,6 +53,18 @@ export async function updateUser(id: string, data: UpdateUserRequest) {
   return formatUser(updated);
 }
 
+export async function updateSelf(userId: string, data: { displayName: string }) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new NotFoundError('User');
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { displayName: data.displayName },
+    include: { role: true },
+  });
+  return formatUser(updated);
+}
+
 export async function deleteUser(id: string) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new NotFoundError('User');

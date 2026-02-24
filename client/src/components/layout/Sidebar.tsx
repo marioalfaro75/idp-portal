@@ -5,7 +5,7 @@ import { PERMISSIONS } from '@idp/shared';
 import {
   LayoutDashboard, Layers, Rocket, Cloud, GitBranch,
   Users, UsersRound, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box, Terminal,
-  GripVertical, Check, ChevronUp, ChevronDown,
+  GripVertical, Check, ChevronUp, ChevronDown, ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -26,12 +26,13 @@ const navItems: NavItem[] = [
   { to: '/github', label: 'GitHub', icon: GitBranch, permission: PERMISSIONS.GITHUB_MANAGE },
   { to: '/admin/audit-log', label: 'Audit Log', icon: FileText, permission: PERMISSIONS.AUDIT_LOGS_VIEW },
   {
-    to: '/admin/settings', label: 'Settings', icon: Settings,
+    to: '/settings', label: 'User Settings', icon: Settings,
     children: [
       { to: '/admin/users', label: 'Users', icon: Users, permission: PERMISSIONS.USERS_LIST },
       { to: '/admin/roles', label: 'Roles', icon: Shield, permission: PERMISSIONS.ROLES_MANAGE },
       { to: '/admin/groups', label: 'Groups', icon: UsersRound, permission: PERMISSIONS.GROUPS_MANAGE },
       { to: '/admin/terraform', label: 'Terraform', icon: Terminal, permission: PERMISSIONS.SETTINGS_MANAGE },
+      { to: '/admin/portal', label: 'Portal', icon: ShieldCheck, permission: PERMISSIONS.PORTAL_ADMIN },
     ],
   },
 ];
@@ -42,7 +43,15 @@ function filterNavItems(items: NavItem[], hasPermission: (p: string) => boolean)
       const visibleChildren = item.children.filter(
         (child) => !child.permission || hasPermission(child.permission),
       );
-      if (visibleChildren.length > 0) {
+      if (!item.permission || hasPermission(item.permission)) {
+        // Parent has no permission gate (or user has it): always show
+        // If no visible children, show as plain link (no children)
+        if (visibleChildren.length > 0) {
+          acc.push({ ...item, children: visibleChildren });
+        } else {
+          acc.push({ ...item, children: undefined });
+        }
+      } else if (visibleChildren.length > 0) {
         acc.push({ ...item, children: visibleChildren });
       }
     } else if (!item.permission || hasPermission(item.permission)) {

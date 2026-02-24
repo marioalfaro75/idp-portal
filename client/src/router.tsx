@@ -21,6 +21,7 @@ import { GroupsPage } from './pages/admin/GroupsPage';
 import { AuditLogPage } from './pages/admin/AuditLogPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { TerraformPage } from './pages/admin/TerraformPage';
+import { PortalAdminPage } from './pages/admin/PortalAdminPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -49,8 +50,9 @@ export const router = createBrowserRouter([
       { path: 'admin/roles', element: <RolesPage /> },
       { path: 'admin/groups', element: <GroupsPage /> },
       { path: 'admin/audit-log', element: <AuditLogPage /> },
-      { path: 'admin/settings', element: <SettingsPage /> },
+      { path: 'settings', element: <SettingsPage /> },
       { path: 'admin/terraform', element: <TerraformPage /> },
+      { path: 'admin/portal', element: <PortalAdminPage /> },
     ],
   },
 ]);

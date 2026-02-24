@@ -1,108 +1,171 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { settingsApi } from '../../api/settings';
+import { useAuthStore } from '../../stores/auth-store';
+import { useUiStore } from '../../stores/ui-store';
+import { usersApi } from '../../api/users';
+import { authApi } from '../../api/auth';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import toast from 'react-hot-toast';
 
-const OIDC_KEYS = ['oidc.tenantId', 'oidc.clientId', 'oidc.clientSecret', 'oidc.redirectUri'];
-const GITHUB_KEYS = ['github.defaultRepo', 'github.defaultWorkflow', 'github.defaultRef'];
+type Theme = 'light' | 'dark' | 'system';
 
 export function SettingsPage() {
-  const queryClient = useQueryClient();
-  const { data: settings = {}, isLoading } = useQuery({ queryKey: ['settings'], queryFn: settingsApi.getAll });
-  const [oidcForm, setOidcForm] = useState<Record<string, string>>({});
-  const [githubForm, setGithubForm] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [savingGithub, setSavingGithub] = useState(false);
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">User Settings</h1>
+      <ProfileSection />
+      <PasswordSection />
+      <AppearanceSection />
+      <SidebarSection />
+    </div>
+  );
+}
 
-  const handleSaveOidc = async () => {
+function ProfileSection() {
+  const { user, setAuth, token } = useAuthStore();
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      for (const key of OIDC_KEYS) {
-        if (oidcForm[key] !== undefined) {
-          await settingsApi.set(key, oidcForm[key]);
-        }
+      await usersApi.updateProfile({ displayName });
+      if (user && token) {
+        setAuth({ ...user, displayName }, token);
       }
-      toast.success('OIDC settings saved');
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      toast.success('Profile updated');
     } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Failed to save');
+      toast.error(err.response?.data?.error?.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveGithub = async () => {
-    setSavingGithub(true);
+  return (
+    <Card title="Profile">
+      <div className="space-y-4 max-w-lg">
+        <Input label="Email" value={user?.email ?? ''} disabled />
+        <Input label="Role" value={user?.role?.name ?? ''} disabled />
+        <Input
+          label="Display Name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+        <Button onClick={handleSave} loading={saving} disabled={displayName.length < 2}>
+          Save Profile
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function PasswordSection() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const canSubmit = currentPassword.length > 0 && newPassword.length >= 8 && newPassword === confirmPassword;
+
+  const handleSave = async () => {
+    if (!canSubmit) return;
+    setSaving(true);
     try {
-      for (const key of GITHUB_KEYS) {
-        if (githubForm[key] !== undefined) {
-          await settingsApi.set(key, githubForm[key]);
-        }
-      }
-      toast.success('GitHub Actions defaults saved');
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      await authApi.changePassword(currentPassword, newPassword);
+      toast.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
     } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Failed to save');
+      toast.error(err.response?.data?.error?.message || 'Failed to change password');
     } finally {
-      setSavingGithub(false);
+      setSaving(false);
     }
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
-  }
+  return (
+    <Card title="Change Password">
+      <div className="space-y-4 max-w-lg">
+        <Input
+          label="Current Password"
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+        />
+        <Input
+          label="New Password"
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="Minimum 8 characters"
+        />
+        <Input
+          label="Confirm New Password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          error={confirmPassword.length > 0 && newPassword !== confirmPassword ? 'Passwords do not match' : undefined}
+        />
+        <Button onClick={handleSave} loading={saving} disabled={!canSubmit}>
+          Change Password
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function AppearanceSection() {
+  const { theme, setTheme } = useUiStore();
+
+  const themes: { value: Theme; label: string }[] = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'System' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
-
-      <Card title="Azure AD OIDC Configuration">
-        <div className="space-y-4 max-w-lg">
-          <Input label="Tenant ID" value={oidcForm['oidc.tenantId'] ?? settings['oidc.tenantId'] ?? ''} onChange={(e) => setOidcForm({ ...oidcForm, 'oidc.tenantId': e.target.value })} />
-          <Input label="Client ID" value={oidcForm['oidc.clientId'] ?? settings['oidc.clientId'] ?? ''} onChange={(e) => setOidcForm({ ...oidcForm, 'oidc.clientId': e.target.value })} />
-          <Input label="Client Secret" type="password" value={oidcForm['oidc.clientSecret'] ?? settings['oidc.clientSecret'] ?? ''} onChange={(e) => setOidcForm({ ...oidcForm, 'oidc.clientSecret': e.target.value })} />
-          <Input label="Redirect URI" value={oidcForm['oidc.redirectUri'] ?? settings['oidc.redirectUri'] ?? 'http://localhost:3001/api/auth/oidc/callback'} onChange={(e) => setOidcForm({ ...oidcForm, 'oidc.redirectUri': e.target.value })} />
-          <Button onClick={handleSaveOidc} loading={saving}>Save OIDC Settings</Button>
-        </div>
-      </Card>
-
-      <Card title="GitHub Actions Defaults">
-        <div className="space-y-4 max-w-lg">
-          <Input
-            label="Default Repository"
-            placeholder="org/infra-repo"
-            value={githubForm['github.defaultRepo'] ?? settings['github.defaultRepo'] ?? ''}
-            onChange={(e) => setGithubForm({ ...githubForm, 'github.defaultRepo': e.target.value })}
-          />
-          <Input
-            label="Default Workflow"
-            placeholder="deploy.yml"
-            value={githubForm['github.defaultWorkflow'] ?? settings['github.defaultWorkflow'] ?? ''}
-            onChange={(e) => setGithubForm({ ...githubForm, 'github.defaultWorkflow': e.target.value })}
-          />
-          <Input
-            label="Default Branch"
-            placeholder="main"
-            value={githubForm['github.defaultRef'] ?? settings['github.defaultRef'] ?? ''}
-            onChange={(e) => setGithubForm({ ...githubForm, 'github.defaultRef': e.target.value })}
-          />
-          <Button onClick={handleSaveGithub} loading={savingGithub}>Save GitHub Defaults</Button>
-        </div>
-      </Card>
-
-      <Card title="System Info">
-        <dl className="space-y-2">
-          {Object.entries(settings).filter(([k]) => !k.startsWith('oidc.') && !k.startsWith('github.')).map(([key, value]) => (
-            <div key={key} className="flex gap-4">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">{key}</dt>
-              <dd className="text-sm">{value}</dd>
-            </div>
+    <Card title="Appearance">
+      <div className="space-y-3 max-w-lg">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Theme</label>
+        <div className="flex gap-3">
+          {themes.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTheme(t.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                theme === t.value
+                  ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-400'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              {t.label}
+            </button>
           ))}
-        </dl>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SidebarSection() {
+  const { setMenuOrder, menuOrder } = useUiStore();
+
+  const handleReset = () => {
+    setMenuOrder([]);
+    toast.success('Menu order reset to defaults');
+  };
+
+  return (
+    <Card title="Sidebar">
+      <div className="space-y-3 max-w-lg">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Reset the sidebar menu order to its default arrangement.
+        </p>
+        <Button variant="secondary" onClick={handleReset} disabled={menuOrder.length === 0}>
+          Reset Menu Order
+        </Button>
+      </div>
+    </Card>
   );
 }

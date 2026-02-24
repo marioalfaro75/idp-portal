@@ -166,17 +166,43 @@ router.put('/terraform/path', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandl
 
 // --- General settings endpoints ---
 
-router.get('/', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandler(async (_req, res) => {
+const PORTAL_ADMIN_KEY_PREFIXES = ['oidc.', 'github.'];
+
+function isPortalAdminKey(key: string): boolean {
+  return PORTAL_ADMIN_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+function hasPortalAdmin(req: import('express').Request): boolean {
+  return req.user?.permissions?.includes(PERMISSIONS.PORTAL_ADMIN) ?? false;
+}
+
+router.get('/', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandler(async (req, res) => {
   const settings = await settingsService.getAll();
+  if (!hasPortalAdmin(req)) {
+    const filtered: Record<string, string> = {};
+    for (const [key, value] of Object.entries(settings)) {
+      if (!isPortalAdminKey(key)) filtered[key] = value;
+    }
+    res.json(filtered);
+    return;
+  }
   res.json(settings);
 }));
 
 router.put('/:key', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandler(async (req, res) => {
+  if (isPortalAdminKey(req.params.key) && !hasPortalAdmin(req)) {
+    res.status(403).json({ error: { message: 'Portal Admin permission required' } });
+    return;
+  }
   await settingsService.set(req.params.key, req.body.value);
   res.json({ key: req.params.key, value: req.body.value });
 }));
 
 router.delete('/:key', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandler(async (req, res) => {
+  if (isPortalAdminKey(req.params.key) && !hasPortalAdmin(req)) {
+    res.status(403).json({ error: { message: 'Portal Admin permission required' } });
+    return;
+  }
   await settingsService.del(req.params.key);
   res.status(204).end();
 }));

@@ -3,12 +3,17 @@ import { asyncHandler } from '../../utils/async-handler';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
-import { PERMISSIONS, createUserSchema, updateUserSchema, setUserGroupsSchema } from '@idp/shared';
+import { PERMISSIONS, createUserSchema, updateUserSchema, setUserGroupsSchema, updateProfileSchema } from '@idp/shared';
 import * as usersService from './users.service';
 
 const router = Router();
 
 router.use(authenticate);
+
+router.patch('/me', validate(updateProfileSchema), asyncHandler(async (req, res) => {
+  const user = await usersService.updateSelf(req.user!.sub, req.body);
+  res.json(user);
+}));
 
 router.get('/', authorize(PERMISSIONS.USERS_LIST), asyncHandler(async (_req, res) => {
   const users = await usersService.listUsers();

@@ -7,4 +7,6 @@ export const authApi = {
   logout: () => api.post('/auth/logout').then((r) => r.data),
   getMe: () => api.get<AuthUser>('/auth/me').then((r) => r.data),
   getSetupStatus: () => api.get<{ setupComplete: boolean }>('/auth/setup-status').then((r) => r.data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ message: string }>('/auth/change-password', { currentPassword, newPassword }).then((r) => r.data),
 };

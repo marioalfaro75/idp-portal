@@ -60,9 +60,10 @@ export async function setup(email: string, password: string, displayName: string
     throw new ConflictError('Setup already completed');
   }
 
-  const adminRole = await prisma.role.findUnique({ where: { name: 'Admin' } });
+  const adminRole = await prisma.role.findUnique({ where: { name: 'Portal Admin' } })
+    ?? await prisma.role.findUnique({ where: { name: 'Admin' } });
   if (!adminRole) {
-    throw new AppError(500, 'Admin role not found. Run database seed first.');
+    throw new AppError(500, 'Portal Admin role not found. Run database seed first.');
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -103,6 +104,21 @@ export async function logout(jti: string): Promise<void> {
 export async function isSetupComplete(): Promise<boolean> {
   const setting = await prisma.systemSetting.findUnique({ where: { key: 'setup.complete' } });
   return setting?.value === 'true';
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !user.passwordHash) {
+    throw new UnauthorizedError('User not found');
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    throw new UnauthorizedError('Current password is incorrect');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
 }
 
 export async function getMe(userId: string): Promise<AuthResponse['user']> {

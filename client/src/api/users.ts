@@ -8,4 +8,5 @@ export const usersApi = {
   update: (id: string, data: UpdateUserRequest) => api.put<User>(`/users/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
   setGroups: (id: string, groupIds: string[]) => api.put<User>(`/users/${id}/groups`, { groupIds }).then((r) => r.data),
+  updateProfile: (data: { displayName: string }) => api.patch<User>('/users/me', data).then((r) => r.data),
 };
