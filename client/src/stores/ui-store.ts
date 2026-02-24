@@ -20,11 +20,26 @@ function getInitialTheme(): Theme {
   return 'system';
 }
 
+function getInitialMenuOrder(): string[] {
+  try {
+    const stored = localStorage.getItem('menuOrder');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) return parsed;
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
 interface UiState {
   sidebarCollapsed: boolean;
   theme: Theme;
+  menuOrder: string[];
+  menuEditMode: boolean;
   toggleSidebar: () => void;
   setTheme: (theme: Theme) => void;
+  setMenuOrder: (order: string[]) => void;
+  toggleMenuEditMode: () => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => {
@@ -42,11 +57,18 @@ export const useUiStore = create<UiState>((set, get) => {
   return {
     sidebarCollapsed: false,
     theme: initialTheme,
+    menuOrder: getInitialMenuOrder(),
+    menuEditMode: false,
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     setTheme: (theme: Theme) => {
       localStorage.setItem('theme', theme);
       applyTheme(theme);
       set({ theme });
     },
+    setMenuOrder: (order: string[]) => {
+      localStorage.setItem('menuOrder', JSON.stringify(order));
+      set({ menuOrder: order });
+    },
+    toggleMenuEditMode: () => set((s) => ({ menuEditMode: !s.menuEditMode })),
   };
 });
