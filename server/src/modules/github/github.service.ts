@@ -65,6 +65,106 @@ async function getOctokit(userId: string): Promise<Octokit> {
   return new Octokit({ auth: token });
 }
 
+export async function testConnection(userId: string) {
+  try {
+    const octokit = await getOctokit(userId);
+    const { data } = await octokit.users.getAuthenticated();
+
+    let scopes: string[] = [];
+    try {
+      const resp = await octokit.request('HEAD /');
+      scopes = (resp.headers['x-oauth-scopes'] || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+    } catch {}
+
+    // Update scopes in DB if changed
+    await prisma.gitHubConnection.update({
+      where: { userId },
+      data: { scopes: JSON.stringify(scopes) },
+    });
+
+    return { valid: true, message: 'Connection is healthy', username: data.login, scopes };
+  } catch (err: any) {
+    if (err.status === 401) {
+      return { valid: false, message: 'Token has been revoked or expired' };
+    }
+    if (err instanceof NotFoundError) {
+      return { valid: false, message: 'No GitHub connection found' };
+    }
+    return { valid: false, message: err.message || 'Connection test failed' };
+  }
+}
+
+export async function getUsageStats(userId: string) {
+  const ACTIVE_DEPLOYMENT_STATUSES = ['applying', 'planning', 'dispatched', 'running'];
+  const ACTIVE_SERVICE_STATUSES = ['scaffolding', 'active'];
+
+  const [deployments, services] = await Promise.all([
+    prisma.deployment.findMany({
+      where: { executionMethod: 'github', createdById: userId },
+      select: { id: true, name: true, status: true, githubRepo: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+    prisma.service.findMany({
+      where: { githubRepoSlug: { not: '' }, createdById: userId },
+      select: { id: true, name: true, slug: true, status: true, githubRepoSlug: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+  ]);
+
+  // Get all distinct repo slugs for this user
+  const [deploymentRepos, serviceRepos] = await Promise.all([
+    prisma.deployment.findMany({
+      where: { executionMethod: 'github', createdById: userId, githubRepo: { not: null } },
+      select: { githubRepo: true },
+      distinct: ['githubRepo'],
+    }),
+    prisma.service.findMany({
+      where: { githubRepoSlug: { not: '' }, createdById: userId },
+      select: { githubRepoSlug: true },
+      distinct: ['githubRepoSlug'],
+    }),
+  ]);
+
+  const activeRepoSlugs = [
+    ...new Set([
+      ...deploymentRepos.map((d) => d.githubRepo!),
+      ...serviceRepos.map((s) => s.githubRepoSlug),
+    ]),
+  ];
+
+  const activeDeploymentCount = deployments.filter((d) => ACTIVE_DEPLOYMENT_STATUSES.includes(d.status)).length;
+  const activeServiceCount = services.filter((s) => ACTIVE_SERVICE_STATUSES.includes(s.status)).length;
+
+  return {
+    deployments: {
+      total: deployments.length,
+      active: activeDeploymentCount,
+      items: deployments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        status: d.status,
+        githubRepo: d.githubRepo,
+        createdAt: d.createdAt.toISOString(),
+      })),
+    },
+    services: {
+      total: services.length,
+      active: activeServiceCount,
+      items: services.map((s) => ({
+        id: s.id,
+        name: s.name,
+        slug: s.slug,
+        status: s.status,
+        githubRepoSlug: s.githubRepoSlug,
+        createdAt: s.createdAt.toISOString(),
+      })),
+    },
+    activeRepoSlugs,
+  };
+}
+
 export async function listRepos(userId: string) {
   const octokit = await getOctokit(userId);
   const { data } = await octokit.repos.listForAuthenticatedUser({ per_page: 100, sort: 'updated' });
@@ -76,6 +176,8 @@ export async function listRepos(userId: string) {
     private: r.private,
     htmlUrl: r.html_url,
     defaultBranch: r.default_branch,
+    language: r.language || null,
+    updatedAt: r.updated_at || null,
   }));
 }
 

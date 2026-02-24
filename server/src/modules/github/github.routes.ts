@@ -29,6 +29,22 @@ router.delete('/connection', asyncHandler(async (req, res) => {
   res.status(204).end();
 }));
 
+router.get('/connection/test', asyncHandler(async (req, res) => {
+  const result = await service.testConnection(req.user!.sub);
+  res.json(result);
+}));
+
+router.patch('/connection', validate(createGitHubConnectionSchema), asyncHandler(async (req, res) => {
+  const connection = await service.connect(req.body.token, req.user!.sub);
+  await auditService.log({ action: 'update_token', resource: 'github', userId: req.user!.sub, ipAddress: req.ip });
+  res.json(connection);
+}));
+
+router.get('/usage', asyncHandler(async (req, res) => {
+  const usage = await service.getUsageStats(req.user!.sub);
+  res.json(usage);
+}));
+
 router.get('/repos', asyncHandler(async (req, res) => {
   const repos = await service.listRepos(req.user!.sub);
   res.json(repos);
