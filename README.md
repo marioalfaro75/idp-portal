@@ -15,10 +15,11 @@ Without a portal, each engineer must install Terraform locally, manage credentia
 - **Cloud Credential Management** — Centrally store and manage cloud provider credentials encrypted with AES-256-GCM
 - **GitHub Integration** — Connect GitHub accounts, dispatch workflows, and track workflow runs
 - **Role-Based Access Control** — 20 granular permissions with 3 system roles (Admin, Editor, Viewer) and support for custom roles
+- **Group-Based Access Control** — Assign templates to groups; members only see their group's templates
+- **Multi-Provider SSO** — Federated authentication with Azure AD, Google Workspace, and Okta via OIDC or SAML 2.0
 - **Deployment Cleanup** — Admin-only bulk removal of stale deployments (failed, destroyed, pending, planned)
 - **Dark/Light Mode** — Toggle between dark, light, and system-preferred themes
 - **Audit Logging** — Every action recorded with user, IP address, and timestamp
-- **Azure AD SSO** — Optional OIDC integration for single sign-on
 - **Responsive Tables** — Resizable columns, sticky headers, custom scrollbars, and mobile card layout
 
 ## Tech Stack
@@ -29,7 +30,8 @@ Without a portal, each engineer must install Terraform locally, manage credentia
 | State Management | Zustand (auth/UI), React Query (server state) |
 | Backend | Express 4, TypeScript |
 | Database | SQLite via Prisma ORM |
-| Auth | JWT with session-based revocation; optional Azure AD OIDC |
+| Auth | JWT with session-based revocation; multi-provider SSO (OIDC + SAML) |
+| SSO Libraries | `openid-client` (OIDC), `@node-saml/node-saml` (SAML 2.0) |
 | Encryption | AES-256-GCM for credentials at rest |
 | IaC Engine | Terraform CLI (spawned as child process) |
 | GitHub | Octokit REST client |
@@ -99,17 +101,40 @@ Browser → Vite proxy (/api) → Express → Prisma → SQLite
 
 | Variable | Purpose |
 |----------|---------|
-| `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET` | Azure AD OIDC single sign-on |
-| `AZURE_AD_REDIRECT_URI` | OIDC callback URL (default: `http://localhost:3001/api/auth/oidc/callback`) |
+| `SERVER_URL` | Base URL for federation callback URLs (default: `http://localhost:3001`) |
+| `CLIENT_URL` | CORS origin and redirect target (default: `http://localhost:5173`) |
 | `TERRAFORM_BIN` | Custom Terraform binary path (default: `terraform` on PATH) |
-| `CLIENT_URL` | CORS origin (default: `http://localhost:5173`) |
+
+> **SSO Configuration:** Identity providers (Azure AD, Google Workspace, Okta) are configured through the Portal Admin UI under **Federation Providers**, not via environment variables. Each provider stores its OIDC or SAML configuration encrypted in the database.
 
 ## User Roles
 
 | Role | Access |
 |------|--------|
-| **Admin** | Full access — manage users, roles, credentials, templates, deployments, services, settings |
+| **Portal Admin** | Full access — manage users, roles, credentials, templates, deployments, services, settings, federation providers |
+| **Admin** | Full access except portal-level settings (federation, system config) |
 | **Editor** | Manage cloud connections, deploy templates, scaffold services, dispatch GitHub workflows |
 | **Viewer** | Browse template catalog, view deployments and services (read-only) |
 
 Admins can also create custom roles with any subset of the 20 available permissions.
+
+## Federation (SSO)
+
+The portal supports federated authentication with multiple identity providers simultaneously:
+
+| Provider | Protocols | Notes |
+|----------|-----------|-------|
+| **Azure AD** | OIDC | Issuer: `https://login.microsoftonline.com/{tenantId}/v2.0` |
+| **Google Workspace** | OIDC | Issuer: `https://accounts.google.com` |
+| **Okta** | OIDC, SAML | Issuer: `https://{domain}.okta.com` |
+| **Custom** | OIDC, SAML | Any standards-compliant identity provider |
+
+Each provider is configured in **Portal Admin > Federation Providers** with:
+- A URL-safe slug (used in callback URLs: `/api/federation/{slug}/callback`)
+- Protocol-specific configuration (Issuer URL + Client ID/Secret for OIDC, Entry Point + Certificate for SAML)
+- A default role assigned to auto-created users
+- An enable/disable toggle
+
+SAML providers also expose SP metadata at `/api/federation/{slug}/metadata`.
+
+Legacy Azure AD configurations (stored as `oidc.*` system settings) are automatically migrated to federation providers on server startup.

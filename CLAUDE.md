@@ -47,7 +47,7 @@ Each feature follows this structure in `server/src/modules/{feature}/`:
 - `{feature}.service.ts` — Business logic
 - `{feature}.validators.ts` — Zod schemas (or re-exports from shared)
 
-Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings.
+Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups.
 
 ### Client Structure
 
@@ -62,7 +62,9 @@ Path alias: `@/*` maps to `client/src/*`.
 
 ### Key Subsystems
 
-**Auth**: Email/password (bcrypt 12 rounds) + optional Azure AD OIDC. JWT with session-based revocation via `Session` table tracking JTI. Initial setup creates first admin at `/api/auth/setup`.
+**Auth**: Email/password (bcrypt 12 rounds) + multi-provider SSO federation (Azure AD, Google Workspace, Okta) via OIDC and SAML. JWT with session-based revocation via `Session` table tracking JTI. Initial setup creates first admin at `/api/auth/setup`. `auth.service.ts` exports `generateToken()` and `issueSessionToken()` for reuse by other modules.
+
+**Federation**: Multi-provider identity federation in `server/src/modules/federation/`. `FederationProvider` Prisma model stores per-provider encrypted config (AES-256-GCM). Dynamic routes at `/api/federation/:slug/login` and `/api/federation/:slug/callback`. Uses `openid-client` for OIDC and `@node-saml/node-saml` for SAML 2.0. OIDC state CSRF protection via `federation_state` httpOnly cookie (requires `cookie-parser` middleware). All callbacks redirect to `{CLIENT_URL}/auth/callback?token=...&user=...` (same format as `OAuthCallbackPage.tsx` expects). Admin CRUD at `/api/federation/admin/providers` (PORTAL_ADMIN permission). Legacy `oidc.*` SystemSettings auto-migrate to FederationProvider on startup.
 
 **RBAC**: 20 permissions, 3 system roles (Admin, Editor, Viewer), custom roles supported. Server enforces via `authorize()` middleware; client uses `<RoleGuard>` for UI only.
 
@@ -79,7 +81,7 @@ Path alias: `@/*` maps to `client/src/*`.
 
 ### Database
 
-SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, GitHubConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`) are nullable text — no migration needed to store additional data in them.
+SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, GitHubConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`) are nullable text — no migration needed to store additional data in them.
 
 ### Error Handling
 
@@ -89,6 +91,10 @@ Server uses custom error classes extending `AppError` in `server/src/utils/error
 
 `client/src/pages/deployments/DeploymentDetailPage.tsx` — Shows deployment status, error card, logs, outputs, and variables. Error card extracts a summary line from error messages (Terraform errors, auth errors) and shows it prominently with a collapsible full-details section. Log section headers are contextual: "SETUP"/"WORKFLOW RUN" for GitHub deployments, "PLAN"/"APPLY" for local. SSE is only connected for local deployments (GitHub deployments get logs via polling on completion).
 
+### Portal Admin Page
+
+`client/src/pages/admin/PortalAdminPage.tsx` — Three cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub Actions Defaults — default repo, workflow, branch; (3) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
+
 ## Environment Setup
 
-Copy `.env.example` to `server/.env`. Required vars: `JWT_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars). Optional: Azure AD, GitHub OAuth, custom Terraform binary path.
+Copy `.env.example` to `server/.env`. Required vars: `JWT_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars). Optional: `SERVER_URL` (for federation callback URLs, defaults to `http://localhost:3001`), `CLIENT_URL` (defaults to `http://localhost:5173`), GitHub OAuth, custom Terraform binary path. SSO providers (Azure AD, Google, Okta) are configured via the Portal Admin UI (Federation Providers), not env vars.
