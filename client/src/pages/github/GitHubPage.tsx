@@ -7,10 +7,10 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
-import { GitBranch, Link2, Unlink, Play, ExternalLink, Shield, Info, Search, RefreshCw, Key, Activity } from 'lucide-react';
+import { GitBranch, Link2, Unlink, ExternalLink, Shield, Info, Search, RefreshCw, Key, Activity } from 'lucide-react';
 import { timeAgo } from '../../utils/time';
 import toast from 'react-hot-toast';
-import type { GitHubRepo, GitHubWorkflow } from '@idp/shared';
+import type { GitHubRepo } from '@idp/shared';
 
 const REQUIRED_SCOPES = ['repo', 'workflow', 'read:org'];
 
@@ -59,12 +59,6 @@ export function GitHubPage() {
   const queryClient = useQueryClient();
   const [token, setToken] = useState('');
   const [connecting, setConnecting] = useState(false);
-  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
-  const [showDispatch, setShowDispatch] = useState(false);
-  const [selectedWorkflow, setSelectedWorkflow] = useState<GitHubWorkflow | null>(null);
-  const [ref, setRef] = useState('main');
-
-  // New state
   const [testing, setTesting] = useState(false);
   const [showUpdateToken, setShowUpdateToken] = useState(false);
   const [newToken, setNewToken] = useState('');
@@ -88,15 +82,6 @@ export function GitHubPage() {
     queryKey: ['githubUsage'],
     queryFn: githubApi.getUsage,
     enabled: !!connection,
-  });
-
-  const { data: workflows = [] } = useQuery({
-    queryKey: ['githubWorkflows', selectedRepo?.fullName],
-    queryFn: () => {
-      const [owner, repo] = selectedRepo!.fullName.split('/');
-      return githubApi.listWorkflows(owner, repo);
-    },
-    enabled: !!selectedRepo,
   });
 
   const activeRepoSlugs = useMemo(() => new Set(usage?.activeRepoSlugs || []), [usage]);
@@ -188,18 +173,6 @@ export function GitHubPage() {
       toast.error(err.response?.data?.error?.message || 'Token update failed');
     } finally {
       setUpdatingToken(false);
-    }
-  };
-
-  const handleDispatch = async () => {
-    if (!selectedRepo || !selectedWorkflow) return;
-    try {
-      const [owner, repo] = selectedRepo.fullName.split('/');
-      await githubApi.dispatchWorkflow({ owner, repo, workflowId: selectedWorkflow.id, ref });
-      toast.success('Workflow dispatched!');
-      setShowDispatch(false);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Dispatch failed');
     }
   };
 
@@ -422,25 +395,20 @@ export function GitHubPage() {
           {/* Repo list */}
           <div className="divide-y dark:divide-gray-700 max-h-[32rem] overflow-y-auto">
             {filteredRepos.map((repo) => (
-              <div key={repo.id} className="flex items-center justify-between py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <GitBranch className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 hover:underline truncate">
-                      {repo.fullName} <ExternalLink className="w-3 h-3 inline" />
-                    </a>
-                    {repo.private && <Badge variant="warning">private</Badge>}
-                    {repo.language && <Badge variant="info">{repo.language}</Badge>}
-                    {activeRepoSlugs.has(repo.fullName) && <Badge variant="success">in use</Badge>}
-                  </div>
-                  <div className="ml-6 flex items-center gap-2">
-                    {repo.description && <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{repo.description}</p>}
-                    {repo.updatedAt && <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{timeAgo(repo.updatedAt)}</span>}
-                  </div>
+              <div key={repo.id} className="py-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <GitBranch className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 hover:underline truncate">
+                    {repo.fullName} <ExternalLink className="w-3 h-3 inline" />
+                  </a>
+                  {repo.private && <Badge variant="warning">private</Badge>}
+                  {repo.language && <Badge variant="info">{repo.language}</Badge>}
+                  {activeRepoSlugs.has(repo.fullName) && <Badge variant="success">in use</Badge>}
                 </div>
-                <Button size="sm" variant="secondary" className="ml-3 flex-shrink-0" onClick={() => { setSelectedRepo(repo); setShowDispatch(true); }}>
-                  <Play className="w-3 h-3 mr-1" /> Actions
-                </Button>
+                <div className="ml-6 flex items-center gap-2">
+                  {repo.description && <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{repo.description}</p>}
+                  {repo.updatedAt && <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{timeAgo(repo.updatedAt)}</span>}
+                </div>
               </div>
             ))}
             {filteredRepos.length === 0 && repos.length > 0 && (
@@ -475,29 +443,6 @@ export function GitHubPage() {
         </div>
       </Modal>
 
-      {/* Workflow Dispatch Modal */}
-      <Modal open={showDispatch} onClose={() => { setShowDispatch(false); setSelectedRepo(null); }} title={`Workflows - ${selectedRepo?.fullName}`}>
-        <div className="space-y-4">
-          {workflows.length === 0 ? <p className="text-gray-500 dark:text-gray-400">No workflows found</p> : workflows.map((wf) => (
-            <div key={wf.id} className="flex items-center justify-between p-3 border dark:border-gray-700 rounded-lg">
-              <div>
-                <p className="font-medium">{wf.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{wf.path}</p>
-              </div>
-              <Button size="sm" onClick={() => { setSelectedWorkflow(wf); }}>
-                <Play className="w-3 h-3 mr-1" /> Run
-              </Button>
-            </div>
-          ))}
-          {selectedWorkflow && (
-            <div className="border-t dark:border-gray-700 pt-4 space-y-3">
-              <p className="font-medium">Dispatch: {selectedWorkflow.name}</p>
-              <Input label="Branch/Ref" value={ref} onChange={(e) => setRef(e.target.value)} />
-              <Button onClick={handleDispatch}>Dispatch Workflow</Button>
-            </div>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }
