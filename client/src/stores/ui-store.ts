@@ -20,6 +20,12 @@ function getInitialTheme(): Theme {
   return 'system';
 }
 
+function getInitialSettingsExpanded(): boolean {
+  const stored = localStorage.getItem('settingsExpanded');
+  if (stored === 'false') return false;
+  return true; // default open
+}
+
 function getInitialMenuOrder(): string[] {
   try {
     const stored = localStorage.getItem('menuOrder');
@@ -36,10 +42,12 @@ interface UiState {
   theme: Theme;
   menuOrder: string[];
   menuEditMode: boolean;
+  settingsExpanded: boolean;
   toggleSidebar: () => void;
   setTheme: (theme: Theme) => void;
   setMenuOrder: (order: string[]) => void;
   toggleMenuEditMode: () => void;
+  toggleSettingsExpanded: () => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => {
@@ -59,6 +67,7 @@ export const useUiStore = create<UiState>((set, get) => {
     theme: initialTheme,
     menuOrder: getInitialMenuOrder(),
     menuEditMode: false,
+    settingsExpanded: getInitialSettingsExpanded(),
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     setTheme: (theme: Theme) => {
       localStorage.setItem('theme', theme);
@@ -70,5 +79,10 @@ export const useUiStore = create<UiState>((set, get) => {
       set({ menuOrder: order });
     },
     toggleMenuEditMode: () => set((s) => ({ menuEditMode: !s.menuEditMode })),
+    toggleSettingsExpanded: () => set((s) => {
+      const next = !s.settingsExpanded;
+      localStorage.setItem('settingsExpanded', String(next));
+      return { settingsExpanded: next };
+    }),
   };
 });
