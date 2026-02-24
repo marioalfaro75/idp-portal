@@ -35,9 +35,3 @@ export interface JwtPayload {
   exp: number;
 }
 
-export interface OidcConfig {
-  tenantId: string;
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-}

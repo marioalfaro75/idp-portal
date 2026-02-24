@@ -7,3 +7,4 @@ export * from './service';
 export * from './variable-validator';
 export * from './group';
 export * from './template';
+export * from './federation';

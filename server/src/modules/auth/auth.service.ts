@@ -5,7 +5,7 @@ import { prisma } from '../../prisma';
 import { UnauthorizedError, ConflictError, AppError } from '../../utils/errors';
 import type { AuthResponse, JwtPayload } from '@idp/shared';
 
-function generateToken(user: { id: string; email: string }, role: { name: string; permissions: string }): { token: string; jti: string; expiresAt: Date } {
+export function generateToken(user: { id: string; email: string }, role: { name: string; permissions: string }): { token: string; jti: string; expiresAt: Date } {
   const jti = uuid();
   const permissions = JSON.parse(role.permissions) as string[];
   const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
@@ -119,6 +119,29 @@ export async function changePassword(userId: string, currentPassword: string, ne
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+}
+
+export async function issueSessionToken(userId: string): Promise<AuthResponse> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+  if (!user) throw new UnauthorizedError('User not found');
+  if (!user.isActive) throw new UnauthorizedError('Account has been disabled');
+
+  const { token, jti, expiresAt } = generateToken(user, user.role);
+  await prisma.session.create({ data: { jti, userId: user.id, expiresAt } });
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: {
+        id: user.role.id,
+        name: user.role.name,
+        permissions: JSON.parse(user.role.permissions),
+      },
+    },
+  };
 }
 
 export async function getMe(userId: string): Promise<AuthResponse['user']> {

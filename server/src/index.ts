@@ -4,6 +4,7 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error-handler';
 import { apiLimiter } from './middleware/rate-limiter';
 import { logger } from './utils/logger';
@@ -21,7 +22,9 @@ import { checkTerraformAvailable } from './modules/deployments/terraform-runner'
 import { pollGitHubDeployments } from './modules/deployments/github-executor';
 import servicesRoutes from './modules/services/services.routes';
 import groupsRoutes from './modules/groups/groups.routes';
+import federationRoutes from './modules/federation/federation.routes';
 import { pollWorkflowRuns } from './modules/services/workflow-poller';
+import { migrateLegacyOidc } from './modules/federation/federation.service';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +32,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 app.use('/api', apiLimiter);
 
 // Routes
@@ -43,6 +47,7 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/groups', groupsRoutes);
+app.use('/api/federation', federationRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -59,6 +64,9 @@ app.listen(PORT, () => {
     if (available) logger.info(`Terraform available: v${version}`);
     else logger.warn('Terraform not found. Local deployments will fail. Install terraform or set TERRAFORM_BIN.');
   });
+
+  // Migrate legacy OIDC settings to federation providers
+  migrateLegacyOidc().catch((err) => logger.error('Legacy OIDC migration failed', { error: (err as Error).message }));
 
   // Start GitHub deployment poller
   setInterval(pollGitHubDeployments, 30_000);

@@ -36,7 +36,8 @@ model Role {
   isSystem    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  users User[]
+  users                User[]
+  federationProviders  FederationProvider[]
 }
 
 model OAuthAccount {
@@ -224,4 +225,19 @@ model GroupTemplate {
   assignedAt DateTime @default(now())
 
   @@unique([groupId, templateId])
+}
+
+model FederationProvider {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  protocol        String   // "oidc" | "saml"
+  providerType    String   // "azure-ad" | "google" | "okta" | "custom"
+  enabled         Boolean  @default(false)
+  config          String   // Encrypted JSON (AES-256-GCM)
+  autoCreateUsers Boolean  @default(true)
+  defaultRoleId   String
+  defaultRole     Role     @relation(fields: [defaultRoleId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
