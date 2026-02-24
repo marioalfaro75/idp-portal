@@ -5,6 +5,7 @@ export interface User {
   isActive: boolean;
   roleId: string;
   role?: Role;
+  groups?: Array<{ id: string; name: string }>;
   createdAt: string;
   updatedAt: string;
 }

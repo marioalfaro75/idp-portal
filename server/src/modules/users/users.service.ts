@@ -5,14 +5,14 @@ import type { CreateUserRequest, UpdateUserRequest } from '@idp/shared';
 
 export async function listUsers() {
   const users = await prisma.user.findMany({
-    include: { role: true },
+    include: { role: true, groupMemberships: { include: { group: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return users.map(formatUser);
 }
 
 export async function getUser(id: string) {
-  const user = await prisma.user.findUnique({ where: { id }, include: { role: true } });
+  const user = await prisma.user.findUnique({ where: { id }, include: { role: true, groupMemberships: { include: { group: true } } } });
   if (!user) throw new NotFoundError('User');
   return formatUser(user);
 }
@@ -59,6 +59,20 @@ export async function deleteUser(id: string) {
   await prisma.user.delete({ where: { id } });
 }
 
+export async function setUserGroups(userId: string, groupIds: string[]) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new NotFoundError('User');
+
+  await prisma.$transaction([
+    prisma.groupMember.deleteMany({ where: { userId } }),
+    ...(groupIds.length > 0
+      ? [prisma.groupMember.createMany({ data: groupIds.map((groupId) => ({ groupId, userId })) })]
+      : []),
+  ]);
+
+  return getUser(userId);
+}
+
 function formatUser(user: any) {
   return {
     id: user.id,
@@ -72,6 +86,7 @@ function formatUser(user: any) {
       permissions: JSON.parse(user.role.permissions),
       isSystem: user.role.isSystem,
     } : undefined,
+    groups: user.groupMemberships?.map((gm: any) => ({ id: gm.group.id, name: gm.group.name })) || [],
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

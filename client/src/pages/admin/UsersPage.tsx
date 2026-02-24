@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '../../api/users';
 import { rolesApi } from '../../api/roles';
+import { groupsApi } from '../../api/groups';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -17,15 +18,18 @@ export function UsersPage() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', displayName: '', roleId: '' });
+  const [formGroupIds, setFormGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ displayName: '', email: '', roleId: '', isActive: true, password: '' });
+  const [editGroupIds, setEditGroupIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ['users'], queryFn: usersApi.list });
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: rolesApi.list });
+  const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: groupsApi.list });
 
   const filteredUsers = useMemo(() => {
     const q = search.toLowerCase();
@@ -42,11 +46,15 @@ export function UsersPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await usersApi.create(form);
+      const created = await usersApi.create(form);
+      if (formGroupIds.length > 0) {
+        await usersApi.setGroups(created.id, formGroupIds);
+      }
       toast.success('User created');
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowAdd(false);
       setForm({ email: '', password: '', displayName: '', roleId: '' });
+      setFormGroupIds([]);
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message || 'Failed');
     } finally {
@@ -63,6 +71,7 @@ export function UsersPage() {
       isActive: user.isActive,
       password: '',
     });
+    setEditGroupIds(user.groups?.map((g) => g.id) || []);
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -80,6 +89,7 @@ export function UsersPage() {
         payload.password = editForm.password;
       }
       await usersApi.update(editUser.id, payload);
+      await usersApi.setGroups(editUser.id, editGroupIds);
       toast.success('User updated');
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setEditUser(null);
@@ -105,6 +115,10 @@ export function UsersPage() {
     { key: 'displayName', header: 'Name', render: (u: User) => <span className="font-medium">{u.displayName}</span> },
     { key: 'email', header: 'Email' },
     { key: 'role', header: 'Role', render: (u: User) => <Badge>{u.role?.name}</Badge> },
+    { key: 'groups', header: 'Groups', render: (u: User) => u.groups && u.groups.length > 0
+      ? <div className="flex flex-wrap gap-1">{u.groups.map((g) => <Badge key={g.id} variant="info">{g.name}</Badge>)}</div>
+      : <span className="text-gray-400 text-sm">—</span>
+    },
     { key: 'isActive', header: 'Status', render: (u: User) => <Badge variant={u.isActive ? 'success' : 'danger'}>{u.isActive ? 'Active' : 'Disabled'}</Badge> },
     { key: 'createdAt', header: 'Created', render: (u: User) => new Date(u.createdAt).toLocaleDateString() },
     {
@@ -149,6 +163,24 @@ export function UsersPage() {
           <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           <Input label="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
           <Select label="Role" options={roles.map((r) => ({ value: r.id, label: r.name }))} value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })} />
+          {groups.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Groups</label>
+              <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-40 overflow-y-auto table-scroll space-y-2">
+                {groups.map((g) => (
+                  <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formGroupIds.includes(g.id)}
+                      onChange={(e) => setFormGroupIds(e.target.checked ? [...formGroupIds, g.id] : formGroupIds.filter((id) => id !== g.id))}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">{g.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button type="submit" loading={loading}>Create</Button>
@@ -162,6 +194,24 @@ export function UsersPage() {
           <Select label="Role" options={roles.map((r) => ({ value: r.id, label: r.name }))} value={editForm.roleId} onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })} />
           <Select label="Status" options={[{ value: 'true', label: 'Active' }, { value: 'false', label: 'Disabled' }]} value={String(editForm.isActive)} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.value === 'true' })} />
           <Input label="New Password" type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} minLength={8} placeholder="Leave blank to keep current" />
+          {groups.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Groups</label>
+              <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-40 overflow-y-auto table-scroll space-y-2">
+                {groups.map((g) => (
+                  <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editGroupIds.includes(g.id)}
+                      onChange={(e) => setEditGroupIds(e.target.checked ? [...editGroupIds, g.id] : editGroupIds.filter((id) => id !== g.id))}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">{g.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => setEditUser(null)}>Cancel</Button>
             <Button type="submit" loading={loading}>Save</Button>

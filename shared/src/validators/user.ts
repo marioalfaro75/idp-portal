@@ -14,3 +14,7 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   password: z.string().min(8).optional(),
 });
+
+export const setUserGroupsSchema = z.object({
+  groupIds: z.array(z.string().uuid()),
+});

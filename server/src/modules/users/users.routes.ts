@@ -3,7 +3,7 @@ import { asyncHandler } from '../../utils/async-handler';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
-import { PERMISSIONS, createUserSchema, updateUserSchema } from '@idp/shared';
+import { PERMISSIONS, createUserSchema, updateUserSchema, setUserGroupsSchema } from '@idp/shared';
 import * as usersService from './users.service';
 
 const router = Router();
@@ -33,6 +33,11 @@ router.put('/:id', authorize(PERMISSIONS.USERS_UPDATE), validate(updateUserSchem
 router.delete('/:id', authorize(PERMISSIONS.USERS_DELETE), asyncHandler(async (req, res) => {
   await usersService.deleteUser(req.params.id);
   res.status(204).end();
+}));
+
+router.put('/:id/groups', authorize(PERMISSIONS.USERS_UPDATE), validate(setUserGroupsSchema), asyncHandler(async (req, res) => {
+  const user = await usersService.setUserGroups(req.params.id, req.body.groupIds);
+  res.json(user);
 }));
 
 export default router;
