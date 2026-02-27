@@ -24,9 +24,9 @@ export function ScaffoldPage() {
     enabled: !!slug,
   });
 
-  const { data: githubConnection } = useQuery({
-    queryKey: ['github-connection'],
-    queryFn: githubApi.getConnection,
+  const { data: githubStatus } = useQuery({
+    queryKey: ['githubStatus'],
+    queryFn: githubApi.getStatus,
     retry: false,
   });
 
@@ -62,10 +62,11 @@ export function ScaffoldPage() {
         <h1 className="text-2xl font-bold">Scaffold: {template.name}</h1>
       </div>
 
-      {!githubConnection && (
+      {!githubStatus?.configured && (
         <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-300">
-          You need to connect your GitHub account to scaffold services.{' '}
-          <Link to="/github" className="text-primary-600 hover:underline font-medium">Connect GitHub</Link>
+          GitHub App is not configured. Ask a Portal Admin to set it up in the{' '}
+          <Link to="/admin" className="text-primary-600 hover:underline font-medium">Portal Administration</Link>{' '}
+          page.
         </div>
       )}
 
@@ -96,7 +97,7 @@ export function ScaffoldPage() {
         )}
 
         <div className="flex justify-end">
-          <Button type="submit" loading={loading} disabled={!name || !githubConnection}>
+          <Button type="submit" loading={loading} disabled={!name || !githubStatus?.configured}>
             <Box className="w-4 h-4 mr-2" /> Scaffold Service
           </Button>
         </div>

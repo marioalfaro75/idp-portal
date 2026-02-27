@@ -1,174 +1,85 @@
-import { Octokit } from '@octokit/rest';
-import { prisma } from '../../prisma';
-import { NotFoundError, AppError } from '../../utils/errors';
-import { encrypt, decrypt } from '../../utils/crypto';
+import { encrypt } from '../../utils/crypto';
+import { AppError } from '../../utils/errors';
 import { logger } from '../../utils/logger';
+import * as settingsService from '../settings/settings.service';
+import {
+  getAppOctokit,
+  getAppConfig,
+  isAppConfigured,
+  getInstallationOwner,
+  invalidateCache,
+  SETTINGS_KEYS,
+} from './github-app';
 
-export async function getConnection(userId: string) {
-  const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
-  if (!conn) throw new NotFoundError('GitHub connection');
+export async function getAppStatus() {
+  const configured = await isAppConfigured();
+  if (!configured) return { configured: false };
+
+  const config = await getAppConfig();
+  const owner = await getInstallationOwner();
   return {
-    id: conn.id,
-    username: conn.username,
-    scopes: JSON.parse(conn.scopes),
-    userId: conn.userId,
-    createdAt: conn.createdAt.toISOString(),
-    updatedAt: conn.updatedAt.toISOString(),
+    configured: true,
+    appId: config?.appId,
+    installationId: config?.installationId,
+    owner,
   };
 }
 
-export async function connect(token: string, userId: string) {
-  const octokit = new Octokit({ auth: token });
-
-  // Verify token
-  let user: any;
-  try {
-    const { data } = await octokit.users.getAuthenticated();
-    user = data;
-  } catch {
-    throw new AppError(400, 'Invalid GitHub token');
+export async function testAppConnection() {
+  const config = await getAppConfig();
+  if (!config) {
+    return { valid: false, message: 'GitHub App is not configured' };
   }
 
-  const encryptedToken = encrypt(token);
-
-  // Get token scopes from headers
-  let scopes: string[] = [];
   try {
-    const resp = await octokit.request('HEAD /');
-    scopes = (resp.headers['x-oauth-scopes'] || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-  } catch {}
-
-  const existing = await prisma.gitHubConnection.findUnique({ where: { userId } });
-  if (existing) {
-    const updated = await prisma.gitHubConnection.update({
-      where: { userId },
-      data: { encryptedToken, username: user.login, scopes: JSON.stringify(scopes) },
-    });
-    return { id: updated.id, username: updated.username, scopes, userId, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
-  }
-
-  const conn = await prisma.gitHubConnection.create({
-    data: { encryptedToken, username: user.login, scopes: JSON.stringify(scopes), userId },
-  });
-
-  return { id: conn.id, username: conn.username, scopes, userId, createdAt: conn.createdAt.toISOString(), updatedAt: conn.updatedAt.toISOString() };
-}
-
-export async function disconnect(userId: string) {
-  await prisma.gitHubConnection.deleteMany({ where: { userId } });
-}
-
-async function getOctokit(userId: string): Promise<Octokit> {
-  const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
-  if (!conn) throw new NotFoundError('GitHub connection');
-  const token = decrypt(conn.encryptedToken);
-  return new Octokit({ auth: token });
-}
-
-export async function testConnection(userId: string) {
-  try {
-    const octokit = await getOctokit(userId);
-    const { data } = await octokit.users.getAuthenticated();
-
-    let scopes: string[] = [];
-    try {
-      const resp = await octokit.request('HEAD /');
-      scopes = (resp.headers['x-oauth-scopes'] || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-    } catch {}
-
-    // Update scopes in DB if changed
-    await prisma.gitHubConnection.update({
-      where: { userId },
-      data: { scopes: JSON.stringify(scopes) },
+    const octokit = await getAppOctokit();
+    const { data } = await octokit.apps.getInstallation({
+      installation_id: Number(config.installationId),
     });
 
-    return { valid: true, message: 'Connection is healthy', username: data.login, scopes };
+    const owner = (data.account as any)?.login || 'unknown';
+    const permissions = data.permissions || {};
+
+    return {
+      valid: true,
+      message: 'GitHub App connection is healthy',
+      owner,
+      permissions,
+    };
   } catch (err: any) {
     if (err.status === 401) {
-      return { valid: false, message: 'Token has been revoked or expired' };
+      return { valid: false, message: 'Authentication failed — check the App ID and private key' };
     }
-    if (err instanceof NotFoundError) {
-      return { valid: false, message: 'No GitHub connection found' };
+    if (err.status === 404) {
+      return { valid: false, message: 'Installation not found — check the Installation ID' };
     }
     return { valid: false, message: err.message || 'Connection test failed' };
   }
 }
 
-export async function getUsageStats(userId: string) {
-  const ACTIVE_DEPLOYMENT_STATUSES = ['applying', 'planning', 'dispatched', 'running'];
-  const ACTIVE_SERVICE_STATUSES = ['scaffolding', 'active'];
-
-  const [deployments, services] = await Promise.all([
-    prisma.deployment.findMany({
-      where: { executionMethod: 'github', createdById: userId },
-      select: { id: true, name: true, status: true, githubRepo: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    }),
-    prisma.service.findMany({
-      where: { githubRepoSlug: { not: '' }, createdById: userId },
-      select: { id: true, name: true, slug: true, status: true, githubRepoSlug: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    }),
+export async function saveAppConfig(appId: string, installationId: string, privateKey: string) {
+  const encryptedKey = encrypt(privateKey);
+  await Promise.all([
+    settingsService.set(SETTINGS_KEYS.appId, appId),
+    settingsService.set(SETTINGS_KEYS.installationId, installationId),
+    settingsService.set(SETTINGS_KEYS.privateKey, encryptedKey),
   ]);
-
-  // Get all distinct repo slugs for this user
-  const [deploymentRepos, serviceRepos] = await Promise.all([
-    prisma.deployment.findMany({
-      where: { executionMethod: 'github', createdById: userId, githubRepo: { not: null } },
-      select: { githubRepo: true },
-      distinct: ['githubRepo'],
-    }),
-    prisma.service.findMany({
-      where: { githubRepoSlug: { not: '' }, createdById: userId },
-      select: { githubRepoSlug: true },
-      distinct: ['githubRepoSlug'],
-    }),
-  ]);
-
-  const activeRepoSlugs = [
-    ...new Set([
-      ...deploymentRepos.map((d) => d.githubRepo!),
-      ...serviceRepos.map((s) => s.githubRepoSlug),
-    ]),
-  ];
-
-  const activeDeploymentCount = deployments.filter((d) => ACTIVE_DEPLOYMENT_STATUSES.includes(d.status)).length;
-  const activeServiceCount = services.filter((s) => ACTIVE_SERVICE_STATUSES.includes(s.status)).length;
-
-  return {
-    deployments: {
-      total: deployments.length,
-      active: activeDeploymentCount,
-      items: deployments.map((d) => ({
-        id: d.id,
-        name: d.name,
-        status: d.status,
-        githubRepo: d.githubRepo,
-        createdAt: d.createdAt.toISOString(),
-      })),
-    },
-    services: {
-      total: services.length,
-      active: activeServiceCount,
-      items: services.map((s) => ({
-        id: s.id,
-        name: s.name,
-        slug: s.slug,
-        status: s.status,
-        githubRepoSlug: s.githubRepoSlug,
-        createdAt: s.createdAt.toISOString(),
-      })),
-    },
-    activeRepoSlugs,
-  };
+  invalidateCache();
 }
 
-export async function listRepos(userId: string) {
-  const octokit = await getOctokit(userId);
-  const { data } = await octokit.repos.listForAuthenticatedUser({ per_page: 100, sort: 'updated' });
-  return data.map((r) => ({
+export async function removeAppConfig() {
+  await Promise.all([
+    settingsService.del(SETTINGS_KEYS.appId),
+    settingsService.del(SETTINGS_KEYS.installationId),
+    settingsService.del(SETTINGS_KEYS.privateKey),
+  ]);
+  invalidateCache();
+}
+
+export async function listRepos() {
+  const octokit = await getAppOctokit();
+  const { data } = await octokit.apps.listReposAccessibleToInstallation({ per_page: 100 });
+  return data.repositories.map((r) => ({
     id: r.id,
     name: r.name,
     fullName: r.full_name,
@@ -181,8 +92,8 @@ export async function listRepos(userId: string) {
   }));
 }
 
-export async function listWorkflows(userId: string, owner: string, repo: string) {
-  const octokit = await getOctokit(userId);
+export async function listWorkflows(owner: string, repo: string) {
+  const octokit = await getAppOctokit();
   const { data } = await octokit.actions.listRepoWorkflows({ owner, repo });
   return data.workflows.map((w) => ({
     id: w.id,
@@ -192,8 +103,8 @@ export async function listWorkflows(userId: string, owner: string, repo: string)
   }));
 }
 
-export async function dispatchWorkflow(userId: string, owner: string, repo: string, workflowId: number, ref: string, inputs?: Record<string, string>) {
-  const octokit = await getOctokit(userId);
+export async function dispatchWorkflow(owner: string, repo: string, workflowId: number, ref: string, inputs?: Record<string, string>) {
+  const octokit = await getAppOctokit();
   try {
     await octokit.actions.createWorkflowDispatch({
       owner,
@@ -205,10 +116,9 @@ export async function dispatchWorkflow(userId: string, owner: string, repo: stri
   } catch (err: any) {
     if (err.status === 403 || err.message?.includes('Resource not accessible')) {
       throw new AppError(403,
-        'GitHub token lacks permission to dispatch workflows. ' +
-        'For classic PATs, enable the "repo" scope. ' +
-        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+        'GitHub App lacks permission to dispatch workflows. ' +
+        'Ensure the App has "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Check the App installation settings on GitHub.'
       );
     }
     throw err;
@@ -216,13 +126,18 @@ export async function dispatchWorkflow(userId: string, owner: string, repo: stri
 }
 
 export async function createRepo(
-  userId: string,
   name: string,
   description: string,
   isPrivate: boolean,
 ): Promise<{ owner: string; repo: string; fullName: string; htmlUrl: string }> {
-  const octokit = await getOctokit(userId);
-  const { data } = await octokit.repos.createForAuthenticatedUser({
+  const octokit = await getAppOctokit();
+  const installOwner = await getInstallationOwner();
+  if (!installOwner) {
+    throw new AppError(503, 'Could not determine GitHub App installation owner');
+  }
+
+  const { data } = await octokit.repos.createInOrg({
+    org: installOwner,
     name,
     description,
     private: isPrivate,
@@ -237,12 +152,11 @@ export async function createRepo(
 }
 
 export async function pushScaffoldFiles(
-  userId: string,
   owner: string,
   repo: string,
   files: Array<{ path: string; content: string }>,
 ): Promise<void> {
-  const octokit = await getOctokit(userId);
+  const octokit = await getAppOctokit();
 
   // Get the reference to main branch
   const { data: ref } = await octokit.git.getRef({ owner, repo, ref: 'heads/main' });
@@ -291,13 +205,12 @@ export async function pushScaffoldFiles(
 }
 
 export async function getWorkflowFileContent(
-  userId: string,
   owner: string,
   repo: string,
   path: string,
   ref?: string,
 ): Promise<{ content: string; sha: string }> {
-  const octokit = await getOctokit(userId);
+  const octokit = await getAppOctokit();
   const params: any = { owner, repo, path };
   if (ref) params.ref = ref;
   const { data } = await octokit.repos.getContent(params) as any;
@@ -307,7 +220,6 @@ export async function getWorkflowFileContent(
 }
 
 export async function updateWorkflowFile(
-  userId: string,
   owner: string,
   repo: string,
   path: string,
@@ -315,7 +227,7 @@ export async function updateWorkflowFile(
   sha: string,
   branch: string,
 ): Promise<void> {
-  const octokit = await getOctokit(userId);
+  const octokit = await getAppOctokit();
   await octokit.repos.createOrUpdateFileContents({
     owner,
     repo,
@@ -328,14 +240,13 @@ export async function updateWorkflowFile(
 }
 
 export async function dispatchWorkflowByName(
-  userId: string,
   owner: string,
   repo: string,
   filename: string,
   ref: string,
   inputs?: Record<string, string>,
 ): Promise<{ runId: string; runUrl: string } | null> {
-  const octokit = await getOctokit(userId);
+  const octokit = await getAppOctokit();
   const dispatchedAt = new Date();
 
   try {
@@ -349,10 +260,9 @@ export async function dispatchWorkflowByName(
   } catch (err: any) {
     if (err.status === 403 || err.message?.includes('Resource not accessible')) {
       throw new AppError(403,
-        'GitHub token lacks permission to dispatch workflows. ' +
-        'For classic PATs, enable the "repo" scope. ' +
-        'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+        'GitHub App lacks permission to dispatch workflows. ' +
+        'Ensure the App has "Actions: Read and write" and "Contents: Read" permissions. ' +
+        'Check the App installation settings on GitHub.'
       );
     }
     throw err;

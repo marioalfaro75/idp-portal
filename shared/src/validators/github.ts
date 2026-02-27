@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-export const createGitHubConnectionSchema = z.object({
-  token: z.string().min(1, 'Token is required'),
+export const saveGitHubAppConfigSchema = z.object({
+  appId: z.string().min(1, 'App ID is required'),
+  installationId: z.string().min(1, 'Installation ID is required'),
+  privateKey: z.string().min(1, 'Private key is required'),
 });
 
 export const dispatchWorkflowSchema = z.object({

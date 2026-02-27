@@ -117,7 +117,6 @@ async function scaffoldAsync(
     if (!service) return;
 
     const repoResult = await githubService.createRepo(
-      userId,
       service.slug,
       `${service.name} - scaffolded from ${template.slug}`,
       false,
@@ -143,7 +142,6 @@ async function scaffoldAsync(
 
     // 3. Push scaffold files to repo
     await githubService.pushScaffoldFiles(
-      userId,
       repoResult.owner,
       repoResult.repo,
       files,
@@ -155,7 +153,6 @@ async function scaffoldAsync(
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const runResult = await githubService.dispatchWorkflowByName(
-        userId,
         repoResult.owner,
         repoResult.repo,
         template.workflow,
@@ -217,7 +214,6 @@ export async function triggerWorkflow(
   const parameters = JSON.parse(service.parameters);
 
   const runResult = await githubService.dispatchWorkflowByName(
-    userId,
     owner,
     repo,
     workflow,
@@ -264,7 +260,6 @@ export async function retryWorkflow(
   const parameters = JSON.parse(service.parameters);
 
   const runResult = await githubService.dispatchWorkflowByName(
-    userId,
     owner,
     repo,
     workflow,

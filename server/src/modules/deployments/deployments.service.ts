@@ -109,7 +109,7 @@ export async function create(data: { name: string; templateId: string; cloudConn
   });
 
   if (executionMethod === 'github') {
-    githubExecutor.dispatchAndTrack(deployment.id, user.sub).catch((err) => {
+    githubExecutor.dispatchAndTrack(deployment.id).catch((err) => {
       logger.error(`GitHub dispatch failed for deployment ${deployment.id}`, { error: (err as Error).message });
       prisma.deployment.update({
         where: { id: deployment.id },
@@ -214,7 +214,7 @@ export async function destroyDeployment(id: string, userId: string) {
 
   if (deployment.executionMethod === 'github') {
     await prisma.deployment.update({ where: { id }, data: { status: 'destroying' } });
-    githubExecutor.dispatchDestroy(id, userId).catch((err) => {
+    githubExecutor.dispatchDestroy(id).catch((err) => {
       logger.error(`GitHub destroy dispatch failed for deployment ${id}`, { error: (err as Error).message });
       prisma.deployment.update({
         where: { id },
@@ -245,7 +245,7 @@ export async function rollbackDeployment(id: string, userId: string) {
 
   if (deployment.executionMethod === 'github') {
     await prisma.deployment.update({ where: { id }, data: { status: 'rolling_back' } });
-    githubExecutor.dispatchRollback(id, userId).catch((err) => {
+    githubExecutor.dispatchRollback(id).catch((err) => {
       logger.error(`GitHub rollback dispatch failed for deployment ${id}`, { error: (err as Error).message });
       prisma.deployment.update({
         where: { id },

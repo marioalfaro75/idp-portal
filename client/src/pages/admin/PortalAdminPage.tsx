@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { settingsApi } from '../../api/settings';
 import { federationApi } from '../../api/federation';
+import { githubApi } from '../../api/github';
 import { rolesApi } from '../../api/roles';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -11,7 +12,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { RoleGuard } from '../../components/guards/RoleGuard';
 import { PERMISSIONS } from '@idp/shared';
-import { Plus, Pencil, Trash2, Copy, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, Check, RefreshCw, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
   FederationProviderAdmin,
@@ -413,6 +414,173 @@ function ProviderModal({
   );
 }
 
+// --- GitHub App Card ---
+
+function GitHubAppCard() {
+  const queryClient = useQueryClient();
+  const [appId, setAppId] = useState('');
+  const [installationId, setInstallationId] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+
+  const { data: status, isLoading } = useQuery({
+    queryKey: ['githubAppStatus'],
+    queryFn: githubApi.getStatus,
+    retry: false,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: () => githubApi.saveConfig({ appId, installationId, privateKey }),
+    onSuccess: () => {
+      toast.success('GitHub App configured');
+      setAppId('');
+      setInstallationId('');
+      setPrivateKey('');
+      setShowSetup(false);
+      queryClient.invalidateQueries({ queryKey: ['githubAppStatus'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message || 'Failed to save config'),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => githubApi.removeConfig(),
+    onSuccess: () => {
+      toast.success('GitHub App removed');
+      queryClient.invalidateQueries({ queryKey: ['githubAppStatus'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error?.message || 'Failed to remove config'),
+  });
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const result = await githubApi.testConnection();
+      if (result.valid) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Test failed');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleRemove = () => {
+    if (confirm('Remove GitHub App configuration? This will disable all GitHub features.')) {
+      removeMutation.mutate();
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card title="GitHub App">
+        <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" /></div>
+      </Card>
+    );
+  }
+
+  if (status?.configured && !showSetup) {
+    return (
+      <Card
+        title="GitHub App"
+        actions={
+          <>
+            <Button size="sm" variant="secondary" onClick={handleTest} loading={testing}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Test
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setShowSetup(true)}>
+              Reconfigure
+            </Button>
+            <Button size="sm" variant="danger" onClick={handleRemove}>
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Remove
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="text-sm font-medium text-green-700 dark:text-green-400">Connected</span>
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">App ID</span>
+              <p className="font-medium">{status.appId}</p>
+            </div>
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">Installation ID</span>
+              <p className="font-medium">{status.installationId}</p>
+            </div>
+            <div>
+              <span className="text-gray-500 dark:text-gray-400">Organization</span>
+              <p className="font-medium">{status.owner || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="GitHub App">
+      <div className="space-y-4 max-w-lg">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Configure a GitHub App for centralized access to your organization's repositories.
+          This replaces individual personal access tokens with short-lived installation tokens.
+        </p>
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+          <p className="font-medium mb-1">Setup instructions:</p>
+          <ol className="list-decimal list-inside space-y-0.5 text-blue-600 dark:text-blue-400">
+            <li>Create a GitHub App in your organization settings</li>
+            <li>Grant permissions: Contents, Actions, Secrets (R&W), Administration (R&W)</li>
+            <li>Generate a private key and install the App on your org</li>
+            <li>Enter the App ID, Installation ID, and private key below</li>
+          </ol>
+        </div>
+        <Input
+          label="App ID *"
+          value={appId}
+          onChange={(e) => setAppId(e.target.value)}
+          placeholder="123456"
+        />
+        <Input
+          label="Installation ID *"
+          value={installationId}
+          onChange={(e) => setInstallationId(e.target.value)}
+          placeholder="12345678"
+        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Private Key *</label>
+          <textarea
+            className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100 font-mono"
+            rows={6}
+            value={privateKey}
+            onChange={(e) => setPrivateKey(e.target.value)}
+            placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => saveMutation.mutate()}
+            loading={saveMutation.isPending}
+            disabled={!appId || !installationId || !privateKey}
+          >
+            Save Configuration
+          </Button>
+          {showSetup && (
+            <Button variant="secondary" onClick={() => setShowSetup(false)}>
+              Cancel
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // --- Main Content ---
 
 function PortalAdminContent() {
@@ -543,6 +711,8 @@ function PortalAdminContent() {
       </Card>
 
       <ProviderModal open={modalOpen} onClose={() => { setModalOpen(false); setEditingId(null); }} editingId={editingId} />
+
+      <GitHubAppCard />
 
       <Card title="GitHub Actions Defaults">
         <div className="space-y-4 max-w-lg">

@@ -39,9 +39,9 @@ export function DeployPage() {
     queryFn: cloudConnectionsApi.list,
   });
 
-  const { data: githubConnection } = useQuery({
-    queryKey: ['github-connection'],
-    queryFn: githubApi.getConnection,
+  const { data: githubStatus } = useQuery({
+    queryKey: ['githubStatus'],
+    queryFn: githubApi.getStatus,
     enabled: executionMethod === 'github',
     retry: false,
   });
@@ -49,7 +49,7 @@ export function DeployPage() {
   const { data: repos = [] } = useQuery({
     queryKey: ['github-repos'],
     queryFn: githubApi.listRepos,
-    enabled: executionMethod === 'github' && !!githubConnection,
+    enabled: executionMethod === 'github' && !!githubStatus?.configured,
   });
 
   const selectedRepoFullName = repos.find((r) => r.fullName === githubRepo)?.fullName || '';
@@ -189,14 +189,15 @@ export function DeployPage() {
               </label>
             </div>
 
-            {executionMethod === 'github' && !githubConnection && (
+            {executionMethod === 'github' && !githubStatus?.configured && (
               <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-300">
-                You need to connect your GitHub account first.{' '}
-                <Link to="/github" className="text-primary-600 hover:underline font-medium">Connect GitHub</Link>
+                GitHub App is not configured. Ask a Portal Admin to set it up in the{' '}
+                <Link to="/admin" className="text-primary-600 hover:underline font-medium">Portal Administration</Link>{' '}
+                page.
               </div>
             )}
 
-            {executionMethod === 'github' && githubConnection && (
+            {executionMethod === 'github' && githubStatus?.configured && (
               <div className="space-y-4">
                 <Select
                   label="GitHub Repository *"

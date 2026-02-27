@@ -1,23 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import sodium from 'libsodium-wrappers';
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../../prisma';
-import { decrypt } from '../../utils/crypto';
 import { logger } from '../../utils/logger';
 import { getLogEmitter } from './deployments.service';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import { listWorkflows, getWorkflowFileContent, updateWorkflowFile, pushScaffoldFiles } from '../github/github.service';
+import { getAppOctokit, isAppConfigured } from '../github/github-app';
 import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars, fixTerraformDestroyStep, fixTerraformStatePersistence } from '../github/workflow-validator';
 import type { TemplateVariable } from '@idp/shared';
 import { generateTfvarsJson } from '../../utils/tfvars';
-
-async function getOctokit(userId: string): Promise<Octokit> {
-  const conn = await prisma.gitHubConnection.findUnique({ where: { userId } });
-  if (!conn) throw new Error('No GitHub connection found. Connect GitHub first.');
-  const token = decrypt(conn.encryptedToken);
-  return new Octokit({ auth: token });
-}
 
 function parseRepo(repo: string): { owner: string; repo: string } {
   const [owner, name] = repo.split('/');
@@ -42,7 +34,7 @@ function extractErrorSummary(logText: string): string | null {
 }
 
 async function fetchRunLogs(
-  octokit: Octokit,
+  octokit: Awaited<ReturnType<typeof getAppOctokit>>,
   owner: string,
   repo: string,
   runId: number,
@@ -139,7 +131,6 @@ function createLogCollector(deploymentId: string): { messages: string[]; attach:
 
 async function pushTemplateFiles(
   deploymentId: string,
-  userId: string,
   owner: string,
   repo: string,
   templatePath: string,
@@ -169,7 +160,7 @@ async function pushTemplateFiles(
     files.push({ path: 'terraform/terraform.tfvars.json', content: tfvarsJson });
 
     emitter.emit('log', { type: 'status', message: `Pushing ${files.length} template files to ${owner}/${repo}/terraform/` });
-    await pushScaffoldFiles(userId, owner, repo, files);
+    await pushScaffoldFiles(owner, repo, files);
     emitter.emit('log', { type: 'status', message: 'Template files pushed successfully' });
 
     // Wait for GitHub to process the commit
@@ -207,13 +198,13 @@ function buildCredentialSecrets(provider: string, credentials: Record<string, un
 
 async function pushCloudCredentials(
   deploymentId: string,
-  octokit: Octokit,
   owner: string,
   repo: string,
   cloudConnectionId: string,
   provider: string,
 ): Promise<string[]> {
   const emitter = getLogEmitter(deploymentId);
+  const octokit = await getAppOctokit();
 
   const { credentials } = await cloudConnectionService.getDecryptedCredentials(cloudConnectionId);
   const secrets = buildCredentialSecrets(provider, credentials);
@@ -249,10 +240,9 @@ async function pushCloudCredentials(
   } catch (err: any) {
     if (err.status === 403 || err.message?.includes('Resource not accessible')) {
       throw new Error(
-        'GitHub token lacks permission to set repository secrets. ' +
-        'For fine-grained PATs, grant "Secrets: Read and write" permission. ' +
-        'For classic PATs, enable the "repo" scope. ' +
-        'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+        'GitHub App lacks permission to set repository secrets. ' +
+        'Ensure the App has "Secrets: Read and write" permission. ' +
+        'Check the App installation settings on GitHub.'
       );
     }
     throw err;
@@ -263,7 +253,6 @@ async function pushCloudCredentials(
 
 async function ensureWorkflowReady(
   deploymentId: string,
-  userId: string,
   owner: string,
   repo: string,
   workflowId: string,
@@ -273,7 +262,7 @@ async function ensureWorkflowReady(
   const emitter = getLogEmitter(deploymentId);
   try {
     // Resolve workflow file path from workflow ID
-    const workflows = await listWorkflows(userId, owner, repo);
+    const workflows = await listWorkflows(owner, repo);
     const workflow = workflows.find((w) => String(w.id) === workflowId || w.path === workflowId || w.name === workflowId);
     if (!workflow) {
       emitter.emit('log', { type: 'warning', message: 'Could not find workflow file to validate — proceeding with dispatch' });
@@ -283,7 +272,7 @@ async function ensureWorkflowReady(
     const filePath = workflow.path; // e.g. ".github/workflows/deploy.yml"
     emitter.emit('log', { type: 'status', message: `Validating workflow file: ${filePath}` });
 
-    const { content, sha } = await getWorkflowFileContent(userId, owner, repo, filePath, ref);
+    const { content, sha } = await getWorkflowFileContent(owner, repo, filePath, ref);
 
     // Apply all workflow fixes in sequence
     const result = ensureWorkflowDispatch(content);
@@ -320,7 +309,7 @@ async function ensureWorkflowReady(
 
     // Commit the fix
     emitter.emit('log', { type: 'status', message: `Auto-fixing workflow: ${allChanges.join('; ')}` });
-    await updateWorkflowFile(userId, owner, repo, filePath, finalContent, sha, ref);
+    await updateWorkflowFile(owner, repo, filePath, finalContent, sha, ref);
     emitter.emit('log', { type: 'status', message: 'Workflow file updated — waiting for GitHub to process changes...' });
 
     // Wait for GitHub to process the commit before dispatching
@@ -332,7 +321,7 @@ async function ensureWorkflowReady(
   }
 }
 
-export async function dispatchAndTrack(deploymentId: string, userId: string): Promise<void> {
+export async function dispatchAndTrack(deploymentId: string): Promise<void> {
   const deployment = await prisma.deployment.findUnique({
     where: { id: deploymentId },
     include: { template: true },
@@ -343,16 +332,16 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   collector.attach();
 
   try {
-    const octokit = await getOctokit(userId);
+    const octokit = await getAppOctokit();
     const { owner, repo } = parseRepo(deployment.githubRepo!);
     const workflowId = deployment.githubWorkflowId!;
     const ref = deployment.githubRef || 'main';
     const variables = JSON.parse(deployment.variables);
     const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-    await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
-    const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
-    await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
+    await pushTemplateFiles(deploymentId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
+    const secretNames = await pushCloudCredentials(deploymentId, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+    await ensureWorkflowReady(deploymentId, owner, repo, workflowId, ref, secretNames);
 
     const dispatchedAt = new Date();
 
@@ -374,10 +363,9 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
     } catch (err: any) {
       if (err.status === 403 || err.message?.includes('Resource not accessible')) {
         throw new Error(
-          'GitHub token lacks permission to dispatch workflows. ' +
-          'For classic PATs, enable the "repo" scope. ' +
-          'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-          'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+          'GitHub App lacks permission to dispatch workflows. ' +
+          'Ensure the App has "Actions: Read and write" and "Contents: Read" permissions. ' +
+          'Check the App installation settings on GitHub.'
         );
       }
       throw err;
@@ -394,7 +382,7 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
     // Poll for the run ID after a delay
     setTimeout(async () => {
       try {
-        await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+        await findAndStoreRunId(deploymentId, owner, repo, workflowId, dispatchedAt);
       } catch (err) {
         logger.error(`Failed to find GitHub run for deployment ${deploymentId}`, { error: (err as Error).message });
       }
@@ -411,7 +399,7 @@ export async function dispatchAndTrack(deploymentId: string, userId: string): Pr
   }
 }
 
-export async function dispatchDestroy(deploymentId: string, userId: string): Promise<void> {
+export async function dispatchDestroy(deploymentId: string): Promise<void> {
   const deployment = await prisma.deployment.findUnique({
     where: { id: deploymentId },
     include: { template: true },
@@ -422,16 +410,16 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   collector.attach();
 
   try {
-    const octokit = await getOctokit(userId);
+    const octokit = await getAppOctokit();
     const { owner, repo } = parseRepo(deployment.githubRepo!);
     const workflowId = deployment.githubWorkflowId!;
     const ref = deployment.githubRef || 'main';
     const variables = JSON.parse(deployment.variables);
     const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-    await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
-    const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
-    await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
+    await pushTemplateFiles(deploymentId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
+    const secretNames = await pushCloudCredentials(deploymentId, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+    await ensureWorkflowReady(deploymentId, owner, repo, workflowId, ref, secretNames);
 
     const dispatchedAt = new Date();
 
@@ -453,10 +441,9 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
     } catch (err: any) {
       if (err.status === 403 || err.message?.includes('Resource not accessible')) {
         throw new Error(
-          'GitHub token lacks permission to dispatch workflows. ' +
-          'For classic PATs, enable the "repo" scope. ' +
-          'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-          'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+          'GitHub App lacks permission to dispatch workflows. ' +
+          'Ensure the App has "Actions: Read and write" and "Contents: Read" permissions. ' +
+          'Check the App installation settings on GitHub.'
         );
       }
       throw err;
@@ -472,7 +459,7 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
 
     setTimeout(async () => {
       try {
-        await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+        await findAndStoreRunId(deploymentId, owner, repo, workflowId, dispatchedAt);
       } catch (err) {
         logger.error(`Failed to find GitHub run for destroy ${deploymentId}`, { error: (err as Error).message });
       }
@@ -488,7 +475,7 @@ export async function dispatchDestroy(deploymentId: string, userId: string): Pro
   }
 }
 
-export async function dispatchRollback(deploymentId: string, userId: string): Promise<void> {
+export async function dispatchRollback(deploymentId: string): Promise<void> {
   const deployment = await prisma.deployment.findUnique({
     where: { id: deploymentId },
     include: { template: true },
@@ -499,16 +486,16 @@ export async function dispatchRollback(deploymentId: string, userId: string): Pr
   collector.attach();
 
   try {
-    const octokit = await getOctokit(userId);
+    const octokit = await getAppOctokit();
     const { owner, repo } = parseRepo(deployment.githubRepo!);
     const workflowId = deployment.githubWorkflowId!;
     const ref = deployment.githubRef || 'main';
     const variables = JSON.parse(deployment.variables);
     const templateVarDefs: TemplateVariable[] = JSON.parse(deployment.template.variables || '[]');
 
-    await pushTemplateFiles(deploymentId, userId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
-    const secretNames = await pushCloudCredentials(deploymentId, octokit, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
-    await ensureWorkflowReady(deploymentId, userId, owner, repo, workflowId, ref, secretNames);
+    await pushTemplateFiles(deploymentId, owner, repo, deployment.template.templatePath, variables, templateVarDefs);
+    const secretNames = await pushCloudCredentials(deploymentId, owner, repo, deployment.cloudConnectionId, deployment.template.provider);
+    await ensureWorkflowReady(deploymentId, owner, repo, workflowId, ref, secretNames);
 
     const dispatchedAt = new Date();
 
@@ -530,10 +517,9 @@ export async function dispatchRollback(deploymentId: string, userId: string): Pr
     } catch (err: any) {
       if (err.status === 403 || err.message?.includes('Resource not accessible')) {
         throw new Error(
-          'GitHub token lacks permission to dispatch workflows. ' +
-          'For classic PATs, enable the "repo" scope. ' +
-          'For fine-grained PATs, grant "Actions: Read and write" and "Contents: Read" permissions. ' +
-          'Update your token at https://github.com/settings/tokens and reconnect in the GitHub settings page.'
+          'GitHub App lacks permission to dispatch workflows. ' +
+          'Ensure the App has "Actions: Read and write" and "Contents: Read" permissions. ' +
+          'Check the App installation settings on GitHub.'
         );
       }
       throw err;
@@ -549,7 +535,7 @@ export async function dispatchRollback(deploymentId: string, userId: string): Pr
 
     setTimeout(async () => {
       try {
-        await findAndStoreRunId(deploymentId, userId, owner, repo, workflowId, dispatchedAt);
+        await findAndStoreRunId(deploymentId, owner, repo, workflowId, dispatchedAt);
       } catch (err) {
         logger.error(`Failed to find GitHub run for rollback ${deploymentId}`, { error: (err as Error).message });
       }
@@ -567,13 +553,12 @@ export async function dispatchRollback(deploymentId: string, userId: string): Pr
 
 async function findAndStoreRunId(
   deploymentId: string,
-  userId: string,
   owner: string,
   repo: string,
   workflowId: string,
   dispatchedAt: Date,
 ): Promise<void> {
-  const octokit = await getOctokit(userId);
+  const octokit = await getAppOctokit();
 
   // Try a few times to find the run
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -620,6 +605,12 @@ async function findAndStoreRunId(
 
 export async function pollGitHubDeployments(): Promise<void> {
   try {
+    const configured = await isAppConfigured();
+    if (!configured) {
+      logger.debug('GitHub App not configured — skipping deployment polling');
+      return;
+    }
+
     const deployments = await prisma.deployment.findMany({
       where: {
         executionMethod: 'github',
@@ -630,95 +621,79 @@ export async function pollGitHubDeployments(): Promise<void> {
 
     if (deployments.length === 0) return;
 
-    // Group by createdById to reuse Octokit instances
-    const byUser = new Map<string, typeof deployments>();
-    for (const d of deployments) {
-      const list = byUser.get(d.createdById) || [];
-      list.push(d);
-      byUser.set(d.createdById, list);
-    }
+    const octokit = await getAppOctokit();
 
-    for (const [userId, userDeployments] of byUser) {
-      let octokit: Octokit;
+    for (const deployment of deployments) {
       try {
-        octokit = await getOctokit(userId);
-      } catch {
-        logger.warn(`Cannot poll GitHub for user ${userId}: no connection`);
-        continue;
-      }
+        const { owner, repo } = parseRepo(deployment.githubRepo!);
+        const { data: run } = await octokit.actions.getWorkflowRun({
+          owner,
+          repo,
+          run_id: Number(deployment.githubRunId),
+        });
 
-      for (const deployment of userDeployments) {
-        try {
-          const { owner, repo } = parseRepo(deployment.githubRepo!);
-          const { data: run } = await octokit.actions.getWorkflowRun({
-            owner,
-            repo,
-            run_id: Number(deployment.githubRunId),
-          });
+        let newStatus: string | null = null;
+        const isDestroying = deployment.status === 'destroying';
+        const isRollingBack = deployment.status === 'rolling_back';
 
-          let newStatus: string | null = null;
-          const isDestroying = deployment.status === 'destroying';
-          const isRollingBack = deployment.status === 'rolling_back';
-
-          if (run.status === 'completed') {
-            if (run.conclusion === 'success') {
-              newStatus = isDestroying ? 'destroyed' : isRollingBack ? 'rolled_back' : 'succeeded';
-            } else {
-              newStatus = 'failed';
-            }
-          } else if (run.status === 'in_progress') {
-            newStatus = isDestroying ? 'destroying' : isRollingBack ? 'rolling_back' : 'running';
+        if (run.status === 'completed') {
+          if (run.conclusion === 'success') {
+            newStatus = isDestroying ? 'destroyed' : isRollingBack ? 'rolled_back' : 'succeeded';
+          } else {
+            newStatus = 'failed';
           }
-          // queued/waiting/pending → keep current status
+        } else if (run.status === 'in_progress') {
+          newStatus = isDestroying ? 'destroying' : isRollingBack ? 'rolling_back' : 'running';
+        }
+        // queued/waiting/pending → keep current status
 
-          if (newStatus && newStatus !== deployment.status) {
-            // Fetch logs when run completes (success or failure)
-            let logData: { logs: string; summary: string | null } = { logs: '', summary: null };
-            if (run.status === 'completed') {
-              logData = await fetchRunLogs(octokit, owner, repo, Number(deployment.githubRunId));
-            }
+        if (newStatus && newStatus !== deployment.status) {
+          // Fetch logs when run completes (success or failure)
+          let logData: { logs: string; summary: string | null } = { logs: '', summary: null };
+          if (run.status === 'completed') {
+            logData = await fetchRunLogs(octokit, owner, repo, Number(deployment.githubRunId));
+          }
 
-            const outputField = (isDestroying || isRollingBack) ? 'destroyOutput' : 'applyOutput';
-            const updateData: Record<string, unknown> = {
-              status: newStatus,
-              githubRunUrl: run.html_url,
-            };
+          const outputField = (isDestroying || isRollingBack) ? 'destroyOutput' : 'applyOutput';
+          const updateData: Record<string, unknown> = {
+            status: newStatus,
+            githubRunUrl: run.html_url,
+          };
 
-            if (run.status === 'completed' && logData.logs) {
-              updateData[outputField] = logData.logs;
+          if (run.status === 'completed' && logData.logs) {
+            updateData[outputField] = logData.logs;
 
-              // Extract Terraform outputs from logs on successful apply
-              if (newStatus === 'succeeded') {
-                const parsedOutputs = extractTerraformOutputs(logData.logs);
-                if (parsedOutputs) {
-                  updateData.outputs = JSON.stringify(parsedOutputs);
-                }
+            // Extract Terraform outputs from logs on successful apply
+            if (newStatus === 'succeeded') {
+              const parsedOutputs = extractTerraformOutputs(logData.logs);
+              if (parsedOutputs) {
+                updateData.outputs = JSON.stringify(parsedOutputs);
               }
             }
-
-            if (newStatus === 'failed') {
-              updateData.errorMessage = logData.summary || `GitHub Actions run ${run.conclusion}: ${run.html_url}`;
-            } else {
-              updateData.errorMessage = null;
-            }
-
-            await prisma.deployment.update({
-              where: { id: deployment.id },
-              data: updateData,
-            });
-
-            const emitter = getLogEmitter(deployment.id);
-            emitter.emit('log', { type: 'status', message: `GitHub Actions: ${newStatus}` });
-
-            if (['succeeded', 'failed', 'destroyed', 'rolled_back'].includes(newStatus)) {
-              emitter.emit('log', { type: 'complete', message: newStatus });
-            }
-
-            logger.info(`Deployment ${deployment.id} status updated to ${newStatus}`);
           }
-        } catch (err) {
-          logger.error(`Failed to poll GitHub run for deployment ${deployment.id}`, { error: (err as Error).message });
+
+          if (newStatus === 'failed') {
+            updateData.errorMessage = logData.summary || `GitHub Actions run ${run.conclusion}: ${run.html_url}`;
+          } else {
+            updateData.errorMessage = null;
+          }
+
+          await prisma.deployment.update({
+            where: { id: deployment.id },
+            data: updateData,
+          });
+
+          const emitter = getLogEmitter(deployment.id);
+          emitter.emit('log', { type: 'status', message: `GitHub Actions: ${newStatus}` });
+
+          if (['succeeded', 'failed', 'destroyed', 'rolled_back'].includes(newStatus)) {
+            emitter.emit('log', { type: 'complete', message: newStatus });
+          }
+
+          logger.info(`Deployment ${deployment.id} status updated to ${newStatus}`);
         }
+      } catch (err) {
+        logger.error(`Failed to poll GitHub run for deployment ${deployment.id}`, { error: (err as Error).message });
       }
     }
     // Fail deployments stuck in 'dispatched' with no run ID for >10 minutes

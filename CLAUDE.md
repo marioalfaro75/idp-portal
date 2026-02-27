@@ -75,13 +75,13 @@ Path alias: `@/*` maps to `client/src/*`.
 - *GitHub Actions*: push template files → set repo secrets → validate/fix workflow YAML → dispatch `workflow_dispatch` event → poll for run ID → poll for completion. On completion (success or failure), per-job logs are fetched via Octokit and stored in the same output fields. Error summaries are extracted from logs (Terraform `Error:` lines, cloud auth errors). Dispatched deployments with no run ID after 10 minutes are auto-failed. Pre-dispatch setup logs (credential pushes, workflow validation) are persisted in `planOutput`.
 - Key files: `server/src/modules/deployments/deployments.service.ts` (business logic, SSE emitter), `github-executor.ts` (GitHub Actions dispatch/polling/log fetching), `local-executor.ts` (Terraform CLI execution).
 
-**GitHub Integration**: Encrypted PAT storage (AES-256-GCM). Workflow dispatch for deployments and service scaffolding. Polling every 30s for workflow run status. Workflow YAML is auto-validated and fixed before dispatch (adds `workflow_dispatch` trigger, sets `terraform_wrapper: false`, injects credential env vars, adds destroy step, fixes working directory). Service scaffolding pushes template repos via GitHub API.
+**GitHub Integration**: Centralized GitHub App authentication via `@octokit/auth-app` (replaces per-user PATs). App config (App ID, Installation ID, encrypted private key) stored in SystemSettings. `server/src/modules/github/github-app.ts` provides `getAppOctokit()` factory with 55-min caching. Portal Admin configures the App in Portal Administration page. Workflow dispatch for deployments and service scaffolding. Polling every 30s for workflow run status. Workflow YAML is auto-validated and fixed before dispatch (adds `workflow_dispatch` trigger, sets `terraform_wrapper: false`, injects credential env vars, adds destroy step, fixes working directory). Service scaffolding pushes template repos via GitHub API. Repos created in the App's installation org via `repos.createInOrg()`.
 
-**Encryption**: AES-256-GCM for cloud credentials and tokens. Format: `base64(iv):base64(tag):base64(ciphertext)`. Key from `ENCRYPTION_KEY` env var (64 hex chars).
+**Encryption**: AES-256-GCM for cloud credentials, federation config, and GitHub App private key. Format: `base64(iv):base64(tag):base64(ciphertext)`. Key from `ENCRYPTION_KEY` env var (64 hex chars).
 
 ### Database
 
-SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, GitHubConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`) are nullable text — no migration needed to store additional data in them.
+SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`) are nullable text — no migration needed to store additional data in them.
 
 ### Error Handling
 
@@ -93,7 +93,7 @@ Server uses custom error classes extending `AppError` in `server/src/utils/error
 
 ### Portal Admin Page
 
-`client/src/pages/admin/PortalAdminPage.tsx` — Three cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub Actions Defaults — default repo, workflow, branch; (3) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
+`client/src/pages/admin/PortalAdminPage.tsx` — Four cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub App — configure/test/remove GitHub App (App ID, Installation ID, private key); (3) GitHub Actions Defaults — default repo, workflow, branch; (4) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
 
 ## Environment Setup
 
