@@ -3,6 +3,7 @@ dotenv.config({ path: '../.env' });
 dotenv.config();
 
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error-handler';
@@ -53,6 +54,15 @@ app.use('/api/federation', federationRoutes);
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Production: serve React SPA from client/dist
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // Error handler (must be last)
 app.use(errorHandler);
