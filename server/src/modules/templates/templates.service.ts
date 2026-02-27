@@ -19,7 +19,7 @@ export async function list(query?: { provider?: string; category?: string; searc
     ];
   }
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const accessFilter = await groupsService.getTemplateAccessFilter(user.sub);
     where.AND = [accessFilter];
   }
@@ -32,7 +32,7 @@ export async function get(id: string, user?: UserContext) {
   const template = await prisma.template.findUnique({ where: { id } });
   if (!template) throw new NotFoundError('Template');
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const hasAccess = await groupsService.checkTemplateAccess(id, user.sub);
     if (!hasAccess) throw new NotFoundError('Template');
   }
@@ -44,7 +44,7 @@ export async function getBySlug(slug: string, user?: UserContext) {
   const template = await prisma.template.findUnique({ where: { slug } });
   if (!template) throw new NotFoundError('Template');
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const hasAccess = await groupsService.checkTemplateAccess(template.id, user.sub);
     if (!hasAccess) throw new NotFoundError('Template');
   }

@@ -28,7 +28,7 @@ export function getLogEmitter(deploymentId: string): EventEmitter {
 export async function list(user?: UserContext) {
   const where: Record<string, unknown> = {};
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const accessFilter = await groupsService.getTemplateAccessFilter(user.sub);
     where.template = accessFilter;
   }
@@ -56,7 +56,7 @@ export async function get(id: string, user?: UserContext) {
   });
   if (!deployment) throw new NotFoundError('Deployment');
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const hasAccess = await groupsService.checkTemplateAccess(deployment.templateId, user.sub);
     if (!hasAccess) throw new NotFoundError('Deployment');
   }
@@ -68,7 +68,7 @@ export async function create(data: { name: string; templateId: string; cloudConn
   const template = await prisma.template.findUnique({ where: { id: data.templateId } });
   if (!template) throw new NotFoundError('Template');
 
-  if (user.role !== 'Admin') {
+  if (user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const hasAccess = await groupsService.checkTemplateAccess(data.templateId, user.sub);
     if (!hasAccess) throw new NotFoundError('Template');
   }

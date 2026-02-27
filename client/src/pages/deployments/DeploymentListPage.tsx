@@ -89,7 +89,7 @@ export function DeploymentListPage() {
     });
   }, [deployments, search, statusFilter, templateFilter, executionFilter, creatorFilter]);
 
-  const canCleanup = hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) && user?.role?.name === 'Admin';
+  const canCleanup = hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) && (user?.role?.name === 'Admin' || user?.role?.name === 'Portal Admin');
   const failedCount = deployments.filter((d) => d.status === 'failed').length;
 
   const handleCleanup = async () => {

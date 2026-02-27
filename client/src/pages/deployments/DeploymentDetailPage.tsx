@@ -104,13 +104,15 @@ export function DeploymentDetailPage() {
     return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>;
   }
 
+  const isAdmin = user?.role?.name === 'Admin' || user?.role?.name === 'Portal Admin';
+
   const canDestroy = deployment.status === 'succeeded' &&
     hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) &&
-    (user?.role?.name === 'Admin' || deployment.createdById === user?.id);
+    (isAdmin || deployment.createdById === user?.id);
 
   const canRollback = deployment.status === 'succeeded' &&
     hasPermission(PERMISSIONS.DEPLOYMENTS_DESTROY) &&
-    (user?.role?.name === 'Admin' || deployment.createdById === user?.id);
+    (isAdmin || deployment.createdById === user?.id);
 
   return (
     <div className="space-y-6">

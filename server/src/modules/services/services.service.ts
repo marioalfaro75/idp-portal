@@ -19,7 +19,7 @@ export async function list(query?: { search?: string }, user?: UserContext) {
     ];
   }
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const accessFilter = await groupsService.getTemplateAccessFilter(user.sub);
     where.template = accessFilter;
   }
@@ -54,7 +54,7 @@ export async function get(id: string, user?: UserContext) {
   });
   if (!service) throw new NotFoundError('Service');
 
-  if (user && user.role !== 'Admin') {
+  if (user && user.role !== 'Admin' && user.role !== 'Portal Admin') {
     const hasAccess = await groupsService.checkTemplateAccess(service.templateId, user.sub);
     if (!hasAccess) throw new NotFoundError('Service');
   }
