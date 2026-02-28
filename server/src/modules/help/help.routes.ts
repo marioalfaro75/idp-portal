@@ -11,9 +11,4 @@ router.get('/articles', (_req, res) => {
   res.json(articles);
 });
 
-router.post('/refresh', (_req, res) => {
-  const articles = service.refreshHelpArticles();
-  res.json(articles);
-});
-
 export default router;

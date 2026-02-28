@@ -52,7 +52,3 @@ export function getHelpArticles(): HelpArticle[] {
   return cachedArticles;
 }
 
-export function refreshHelpArticles(): HelpArticle[] {
-  cachedArticles = null;
-  return getHelpArticles();
-}

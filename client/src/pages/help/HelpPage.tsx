@@ -1,12 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { helpApi } from '../../api/help';
-import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Search, RefreshCw, ChevronRight, ChevronDown, BookOpen, ArrowLeft } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Search, ChevronRight, ChevronDown, BookOpen, ArrowLeft } from 'lucide-react';
 import type { HelpArticle } from '@idp/shared';
 import type { Components } from 'react-markdown';
 
@@ -105,8 +103,6 @@ export function HelpPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [openArticle, setOpenArticle] = useState<HelpArticle | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [refreshing, setRefreshing] = useState(false);
-  const queryClient = useQueryClient();
 
   const { data: articles = [], isLoading } = useQuery({
     queryKey: ['help-articles'],
@@ -158,19 +154,6 @@ export function HelpPage() {
     });
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const freshArticles = await helpApi.refresh();
-      queryClient.setQueryData(['help-articles'], freshArticles);
-      toast.success(`Loaded ${freshArticles.length} articles`);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Failed to refresh help articles');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   // Full article view
   if (openArticle) {
     return (
@@ -207,16 +190,11 @@ export function HelpPage() {
   // Article list view
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Help</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Guides and documentation for the IDP Portal
-          </p>
-        </div>
-        <Button variant="secondary" onClick={handleRefresh} loading={refreshing}>
-          <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold">Help</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Guides and documentation for the IDP Portal
+        </p>
       </div>
 
       {/* Search */}
