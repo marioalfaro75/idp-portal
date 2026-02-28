@@ -3,16 +3,107 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { helpApi } from '../../api/help';
-import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Search, RefreshCw, ChevronRight, ChevronDown, BookOpen } from 'lucide-react';
+import { Search, RefreshCw, ChevronRight, ChevronDown, BookOpen, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { HelpArticle } from '@idp/shared';
+import type { Components } from 'react-markdown';
+
+const markdownComponents: Components = {
+  table: ({ children, ...props }) => (
+    <div className="my-4 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" {...props}>
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children, ...props }) => (
+    <thead className="bg-gray-50 dark:bg-gray-800/50" {...props}>{children}</thead>
+  ),
+  th: ({ children, ...props }) => (
+    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider" {...props}>
+      {children}
+    </th>
+  ),
+  td: ({ children, ...props }) => (
+    <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-700/50" {...props}>
+      {children}
+    </td>
+  ),
+  blockquote: ({ children }) => (
+    <div className="my-4 flex gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-300">
+      <span className="mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400">&#x1f4a1;</span>
+      <div className="[&>p]:m-0">{children}</div>
+    </div>
+  ),
+  code: ({ children, className, ...props }) => {
+    const isBlock = className?.startsWith('language-');
+    if (isBlock) {
+      return (
+        <code className={`${className} text-[13px] leading-relaxed`} {...props}>
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className="rounded bg-gray-100 px-1.5 py-0.5 text-[13px] font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-200" {...props}>
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children, ...props }) => (
+    <pre className="my-4 overflow-x-auto rounded-lg border border-gray-200 bg-gray-900 p-4 text-gray-100 dark:border-gray-700 dark:bg-gray-950" {...props}>
+      {children}
+    </pre>
+  ),
+  a: ({ children, href, ...props }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-primary-600 hover:text-primary-700 underline decoration-primary-300 underline-offset-2 dark:text-primary-400 dark:hover:text-primary-300 dark:decoration-primary-700" {...props}>
+      {children}
+    </a>
+  ),
+  h2: ({ children, ...props }) => (
+    <h2 className="mt-8 mb-3 text-lg font-bold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 first:mt-0" {...props}>
+      {children}
+    </h2>
+  ),
+  h3: ({ children, ...props }) => (
+    <h3 className="mt-6 mb-2 text-base font-semibold text-gray-900 dark:text-gray-100" {...props}>
+      {children}
+    </h3>
+  ),
+  ul: ({ children, ...props }) => (
+    <ul className="my-3 ml-1 space-y-1.5 list-none" {...props}>
+      {children}
+    </ul>
+  ),
+  ol: ({ children, ...props }) => (
+    <ol className="my-3 space-y-2 list-decimal list-outside pl-5 marker:text-gray-400 marker:font-semibold dark:marker:text-gray-500" {...props}>
+      {children}
+    </ol>
+  ),
+  li: ({ children, ...props }) => (
+    <li className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed" {...props}>
+      {children}
+    </li>
+  ),
+  p: ({ children, ...props }) => (
+    <p className="my-2.5 text-sm leading-relaxed text-gray-700 dark:text-gray-300" {...props}>
+      {children}
+    </p>
+  ),
+  strong: ({ children, ...props }) => (
+    <strong className="font-semibold text-gray-900 dark:text-gray-100" {...props}>{children}</strong>
+  ),
+  hr: (props) => (
+    <hr className="my-6 border-gray-200 dark:border-gray-700" {...props} />
+  ),
+};
 
 export function HelpPage() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [openArticle, setOpenArticle] = useState<HelpArticle | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const queryClient = useQueryClient();
@@ -80,12 +171,51 @@ export function HelpPage() {
     }
   };
 
+  // Full article view
+  if (openArticle) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <button
+          onClick={() => setOpenArticle(null)}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 mb-4 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Help
+        </button>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800/50 dark:to-gray-800">
+            <div className="flex items-center gap-2 mb-3">
+              <Badge variant="info">{openArticle.category}</Badge>
+              {openArticle.tags.map((tag) => (
+                <Badge key={tag}>{tag}</Badge>
+              ))}
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {openArticle.title}
+            </h1>
+          </div>
+          <div className="px-8 py-6">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {openArticle.content}
+            </ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Article list view
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Help</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Help</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Guides and documentation for the IDP Portal
+          </p>
+        </div>
         <Button variant="secondary" onClick={handleRefresh} loading={refreshing}>
-          <RefreshCw className="w-4 h-4 mr-2" /> Check for updates
+          <RefreshCw className="w-4 h-4 mr-2" /> Refresh
         </Button>
       </div>
 
@@ -93,7 +223,7 @@ export function HelpPage() {
       <div className="relative max-w-xl">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100"
+          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100"
           placeholder="Search help articles..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -108,7 +238,7 @@ export function HelpPage() {
             onClick={() => setActiveCategory(cat)}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               activeCategory === cat
-                ? 'bg-primary-600 text-white'
+                ? 'bg-primary-600 text-white shadow-sm'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
             }`}
           >
@@ -127,8 +257,8 @@ export function HelpPage() {
           <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No help articles available</p>
           <p className="text-sm">
-            Help articles are loaded from the <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">help/</code> directory
-            in your GitHub repository. Make sure the GitHub App is configured and the repository contains a <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">help/</code> folder with markdown files.
+            Help articles are loaded from the <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">help/</code> directory.
+            Make sure the directory contains markdown files with YAML frontmatter.
           </p>
         </div>
       ) : filtered.length === 0 ? (
@@ -138,36 +268,55 @@ export function HelpPage() {
       ) : (
         <div className="space-y-6">
           {grouped.map(([category, categoryArticles]) => (
-            <Card key={category} title={category}>
-              <div className="divide-y divide-gray-100 dark:divide-gray-700 -m-6">
+            <div key={category}>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                {category}
+              </h2>
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden divide-y divide-gray-100 dark:divide-gray-700/50">
                 {categoryArticles.map((article) => {
                   const isExpanded = expandedIds.has(article.id);
                   return (
                     <div key={article.id}>
-                      <button
-                        onClick={() => toggleExpanded(article.id)}
-                        className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        )}
-                        <span className="font-medium text-gray-900 dark:text-gray-100 flex-1">
-                          {article.title}
-                        </span>
-                        <div className="flex gap-1.5 flex-shrink-0">
-                          {article.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag}>{tag}</Badge>
-                          ))}
-                        </div>
-                      </button>
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => toggleExpanded(article.id)}
+                          className="p-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setOpenArticle(article)}
+                          className="flex-1 flex items-center gap-3 py-4 pr-4 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors min-w-0"
+                        >
+                          <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {article.title}
+                          </span>
+                          <div className="flex gap-1.5 flex-shrink-0 ml-auto">
+                            {article.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag}>{tag}</Badge>
+                            ))}
+                          </div>
+                        </button>
+                      </div>
                       {isExpanded && (
-                        <div className="px-6 pb-6 pt-2 border-t border-gray-100 dark:border-gray-700">
-                          <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-primary-600 dark:prose-a:text-primary-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-700 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-gray-900 dark:prose-pre:bg-gray-950 prose-pre:text-gray-100">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <div className="px-6 pb-5 pt-1 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-850/50">
+                          <div className="max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                               {article.content}
                             </ReactMarkdown>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <button
+                              onClick={() => setOpenArticle(article)}
+                              className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                            >
+                              Open full article &rarr;
+                            </button>
                           </div>
                         </div>
                       )}
@@ -175,7 +324,7 @@ export function HelpPage() {
                   );
                 })}
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
