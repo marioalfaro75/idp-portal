@@ -47,7 +47,7 @@ Each feature follows this structure in `server/src/modules/{feature}/`:
 - `{feature}.service.ts` — Business logic
 - `{feature}.validators.ts` — Zod schemas (or re-exports from shared)
 
-Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups, help.
+Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups, help, security.
 
 ### Client Structure
 
@@ -79,11 +79,13 @@ Path alias: `@/*` maps to `client/src/*`.
 
 **Help**: Built-in searchable help section. Markdown articles with YAML frontmatter (title, category, tags, order) stored in `help/` at the repo root. Server reads articles from disk at startup via `server/src/modules/help/help.service.ts` using `gray-matter` for frontmatter parsing. Cached in memory after first request. Single endpoint: `GET /api/help/articles` (requires authentication, no special permission). Client renders markdown with `react-markdown` + `remark-gfm` + `@tailwindcss/typography`. `HelpPage.tsx` provides category filtering, full-text search, inline expand/collapse, and a full article view. Sidebar entry uses `HelpCircle` icon with no permission gate. Help articles are also included in the Docker image (`COPY help/ help/` in Dockerfile).
 
+**Security Scanning**: Pre-deploy scanning gate using Trivy (IaC misconfigurations), TFLint (provider-specific linting), and Conftest (custom OPA/Rego policies). Module at `server/src/modules/security/`. Scans run when user clicks Deploy — results shown in `SecurityScanModal` before Terraform execution. Config stored in SystemSettings: `security.enabled`, `security.enforcement` (blocking/advisory), `security.severityThreshold`, `security.opaPolicy`. Tools auto-detected at startup; Portal Admin can install them from GitHub releases via the UI (`POST /api/security/tools/{tool}/install` downloads to `server/bin/`). Scans create a temp copy of template files with user's variable values as `terraform.tfvars.json` so tools evaluate actual deployment config. Trivy requires explicit `--tf-vars` flag. Missing tools are gracefully skipped (`available: false`). Scan results stored on Deployment record (`scanOutput` field) for audit. Types in `shared/src/types/security.ts`, validators in `shared/src/validators/security.ts`.
+
 **Encryption**: AES-256-GCM for cloud credentials, federation config, and GitHub App private key. Format: `base64(iv):base64(tag):base64(ciphertext)`. Key from `ENCRYPTION_KEY` env var (64 hex chars).
 
 ### Database
 
-SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`) are nullable text — no migration needed to store additional data in them.
+SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`, `scanOutput`) are nullable text — no migration needed to store additional data in them.
 
 ### Error Handling
 
@@ -99,7 +101,7 @@ Server uses custom error classes extending `AppError` in `server/src/utils/error
 
 ### Portal Admin Page
 
-`client/src/pages/admin/PortalAdminPage.tsx` — Four cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub App — configure/test/remove GitHub App (App ID, Installation ID, private key); (3) GitHub Actions Defaults — default repo, workflow, branch; (4) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
+`client/src/pages/admin/PortalAdminPage.tsx` — Five cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub App — configure/test/remove GitHub App (App ID, Installation ID, private key); (3) GitHub Actions Defaults — default repo, workflow, branch; (4) Security Scanning — enable/disable toggle, enforcement mode (blocking/advisory), severity threshold dropdown, tool status indicators with Install buttons, OPA policy textarea; (5) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
 
 ## Environment Setup
 
@@ -107,4 +109,4 @@ Copy `.env.example` to `server/.env`. Required vars: `JWT_SECRET` (min 32 chars)
 
 ## Docker
 
-Multi-stage Dockerfile: build stage compiles all workspaces, production stage copies built artifacts + Prisma schema + templates + help articles. Includes Terraform CLI. `docker-compose.yml` mounts a named volume for SQLite persistence. Setup script (`setup.sh`) supports both Docker and native modes, auto-generates secrets, runs migrations, and seeds the database.
+Multi-stage Dockerfile: build stage compiles all workspaces, production stage copies built artifacts + Prisma schema + templates + help articles. Includes Terraform CLI, Trivy, TFLint, and Conftest for security scanning. `docker-compose.yml` mounts a named volume for SQLite persistence. Setup script (`setup.sh`) supports both Docker and native modes, auto-generates secrets, runs migrations, and seeds the database.
