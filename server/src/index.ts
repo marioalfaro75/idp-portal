@@ -4,8 +4,6 @@ dotenv.config();
 
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
-import { execSync } from 'child_process';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error-handler';
@@ -29,6 +27,8 @@ import federationRoutes from './modules/federation/federation.routes';
 import { pollWorkflowRuns } from './modules/services/workflow-poller';
 import { migrateLegacyOidc } from './modules/federation/federation.service';
 import helpRoutes from './modules/help/help.routes';
+import updatesRoutes from './modules/updates/updates.routes';
+import { getBuildInfo } from './utils/build-info';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -53,12 +53,12 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/groups', groupsRoutes);
 app.use('/api/federation', federationRoutes);
 app.use('/api/help', helpRoutes);
+app.use('/api/updates', updatesRoutes);
 
 // Health check
-const rootPkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf-8'));
-const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+const buildInfo = getBuildInfo();
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', version: `${rootPkg.version}-${commitHash}`, timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: `${buildInfo.version}-${buildInfo.commitHash}`, timestamp: new Date().toISOString() });
 });
 
 // Production: serve React SPA from client/dist

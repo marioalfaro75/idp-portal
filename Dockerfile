@@ -1,6 +1,8 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
 
+ARG COMMIT_HASH=unknown
+
 WORKDIR /app
 
 # Copy workspace package files for dependency install
@@ -11,6 +13,18 @@ COPY client/package.json client/
 
 RUN npm ci
 
+# Write BUILD_INFO.json from build arg (git is not available in Docker)
+RUN node -e " \
+  const pkg = JSON.parse(require('fs').readFileSync('package.json','utf-8')); \
+  const hash = '${COMMIT_HASH}'; \
+  require('fs').writeFileSync('BUILD_INFO.json', JSON.stringify({ \
+    version: pkg.version, \
+    commitHash: hash.substring(0,7), \
+    fullCommitHash: hash, \
+    buildTime: new Date().toISOString() \
+  }, null, 2)); \
+"
+
 # Copy all source code
 COPY shared/ shared/
 COPY server/ server/
@@ -19,7 +33,7 @@ COPY client/ client/
 # Generate Prisma client
 RUN cd server && npx prisma generate
 
-# Build all workspaces: shared → server → client
+# Build all workspaces: shared → server → client (prebuild detects existing BUILD_INFO.json)
 RUN npm run build
 
 # Stage 2: Production
@@ -47,6 +61,9 @@ RUN npm ci --omit=dev --workspace=server --workspace=shared
 COPY --from=builder /app/shared/dist/ shared/dist/
 COPY --from=builder /app/server/dist/ server/dist/
 COPY --from=builder /app/client/dist/ client/dist/
+
+# Copy BUILD_INFO.json
+COPY --from=builder /app/BUILD_INFO.json BUILD_INFO.json
 
 # Copy Prisma schema + seed for migrations/seeding in production
 COPY --from=builder /app/server/prisma/ server/prisma/

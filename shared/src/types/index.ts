@@ -9,3 +9,4 @@ export * from './service';
 export * from './group';
 export * from './federation';
 export * from './help';
+export * from './updates';

@@ -4,6 +4,7 @@ import { settingsApi } from '../../api/settings';
 import { federationApi } from '../../api/federation';
 import { githubApi } from '../../api/github';
 import { rolesApi } from '../../api/roles';
+import { updatesApi } from '../../api/updates';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -12,8 +13,9 @@ import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { RoleGuard } from '../../components/guards/RoleGuard';
 import { PERMISSIONS } from '@idp/shared';
-import { Plus, Pencil, Trash2, Copy, Check, RefreshCw, CheckCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, Check, RefreshCw, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+import type { UpdateCheckResult } from '@idp/shared';
 import type {
   FederationProviderAdmin,
   FederationProviderDetail,
@@ -414,6 +416,92 @@ function ProviderModal({
   );
 }
 
+// --- Update Card ---
+
+function UpdateCard() {
+  const [result, setResult] = useState<UpdateCheckResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const { mutate: checkUpdates, isPending } = useMutation({
+    mutationFn: updatesApi.check,
+    onSuccess: (data) => {
+      setResult(data);
+      setError(null);
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error?.message || 'Failed to check for updates');
+      setResult(null);
+    },
+  });
+
+  return (
+    <Card
+      title="Updates"
+      actions={
+        <Button size="sm" variant="secondary" onClick={() => checkUpdates()} loading={isPending}>
+          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+          Check for Updates
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          Current version: <span className="font-mono font-medium text-gray-900 dark:text-gray-100">{__APP_VERSION__}</span>
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+            <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+            <span className="text-sm text-red-700 dark:text-red-300">{error}</span>
+          </div>
+        )}
+
+        {result && !result.updateAvailable && (
+          <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+            <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+            <span className="text-sm text-green-700 dark:text-green-400">You're up to date!</span>
+          </div>
+        )}
+
+        {result && result.updateAvailable && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+              <div className="space-y-2 min-w-0">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  Update available
+                  {result.commitsBehind > 0 && (
+                    <span className="font-normal text-amber-600 dark:text-amber-400"> — {result.commitsBehind} commit{result.commitsBehind !== 1 ? 's' : ''} behind</span>
+                  )}
+                </p>
+                <div className="text-sm text-amber-700 dark:text-amber-400 space-y-1">
+                  <div>
+                    Latest: <span className="font-mono">{result.latestCommitHash}</span>
+                    {result.latestCommitDate && (
+                      <span className="text-amber-600 dark:text-amber-500"> ({new Date(result.latestCommitDate).toLocaleDateString()})</span>
+                    )}
+                  </div>
+                  {result.latestCommitMessage && (
+                    <div className="truncate text-amber-600 dark:text-amber-500">{result.latestCommitMessage}</div>
+                  )}
+                </div>
+                <a
+                  href={`${result.repoUrl}/compare/${result.currentCommitHash}...main`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-amber-700 dark:text-amber-300 hover:underline"
+                >
+                  View changes on GitHub <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // --- GitHub App Card ---
 
 function GitHubAppCard() {
@@ -642,6 +730,9 @@ function PortalAdminContent() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Portal Administration</h1>
+
+      {/* Updates */}
+      <UpdateCard />
 
       {/* Federation Providers */}
       <Card title="Federation Providers">

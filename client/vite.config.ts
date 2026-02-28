@@ -5,7 +5,20 @@ import fs from 'fs';
 import { execSync } from 'child_process';
 
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8'));
-const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+
+let commitHash = 'unknown';
+const buildInfoPath = path.resolve(__dirname, '../BUILD_INFO.json');
+try {
+  const buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, 'utf-8'));
+  commitHash = buildInfo.commitHash;
+} catch {
+  // Dev mode fallback: read from git
+  try {
+    commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    // git not available
+  }
+}
 
 export default defineConfig({
   plugins: [react()],

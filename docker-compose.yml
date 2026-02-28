@@ -1,6 +1,9 @@
 services:
   idp-portal:
-    build: .
+    build:
+      context: .
+      args:
+        COMMIT_HASH: ${COMMIT_HASH:-unknown}
     ports:
       - "${PORT:-3001}:3001"
     env_file: .env

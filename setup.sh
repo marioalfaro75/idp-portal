@@ -109,6 +109,8 @@ fi
 
 if [[ "$MODE" == "docker" ]]; then
   echo "Building Docker image..."
+  COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+  export COMMIT_HASH
   docker compose build
 
   echo ""
