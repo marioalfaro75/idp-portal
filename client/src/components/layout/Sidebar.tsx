@@ -5,7 +5,7 @@ import { PERMISSIONS } from '@idp/shared';
 import {
   LayoutDashboard, Layers, Rocket, Cloud, GitBranch,
   Users, UsersRound, Shield, FileText, Settings, ChevronLeft, ChevronRight, Box, Terminal,
-  GripVertical, Check, ChevronDown, ShieldCheck,
+  GripVertical, Check, ChevronDown, ShieldCheck, HelpCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -53,6 +53,7 @@ const navItems: NavItem[] = [
       { to: '/admin/portal', label: 'Portal', icon: ShieldCheck, permission: PERMISSIONS.PORTAL_ADMIN },
     ],
   },
+  { to: '/help', label: 'Help', icon: HelpCircle },
 ];
 
 function filterNavItems(items: NavItem[], hasPermission: (p: string) => boolean): NavItem[] {

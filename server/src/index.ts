@@ -26,6 +26,7 @@ import groupsRoutes from './modules/groups/groups.routes';
 import federationRoutes from './modules/federation/federation.routes';
 import { pollWorkflowRuns } from './modules/services/workflow-poller';
 import { migrateLegacyOidc } from './modules/federation/federation.service';
+import helpRoutes from './modules/help/help.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -49,6 +50,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/groups', groupsRoutes);
 app.use('/api/federation', federationRoutes);
+app.use('/api/help', helpRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

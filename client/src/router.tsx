@@ -22,6 +22,7 @@ import { AuditLogPage } from './pages/admin/AuditLogPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { TerraformPage } from './pages/admin/TerraformPage';
 import { PortalAdminPage } from './pages/admin/PortalAdminPage';
+import { HelpPage } from './pages/help/HelpPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
       { path: 'settings', element: <SettingsPage /> },
       { path: 'admin/terraform', element: <TerraformPage /> },
       { path: 'admin/portal', element: <PortalAdminPage /> },
+      { path: 'help', element: <HelpPage /> },
     ],
   },
 ]);
