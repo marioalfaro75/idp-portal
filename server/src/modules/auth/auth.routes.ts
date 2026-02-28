@@ -11,16 +11,19 @@ const router = Router();
 
 router.post('/login', authLimiter, validate(loginSchema), asyncHandler(async (req, res) => {
   const result = await authService.login(req.body.email, req.body.password);
+  await auditService.log({ action: 'login', resource: 'auth', userId: result.user.id, ipAddress: req.ip, details: { email: req.body.email } });
   res.json(result);
 }));
 
 router.post('/setup', authLimiter, validate(setupSchema), asyncHandler(async (req, res) => {
   const result = await authService.setup(req.body.email, req.body.password, req.body.displayName);
+  await auditService.log({ action: 'setup', resource: 'auth', userId: result.user.id, ipAddress: req.ip, details: { email: req.body.email } });
   res.status(201).json(result);
 }));
 
 router.post('/logout', authenticate, asyncHandler(async (req, res) => {
   await authService.logout(req.user!.jti);
+  await auditService.log({ action: 'logout', resource: 'auth', userId: req.user!.sub, ipAddress: req.ip });
   res.json({ message: 'Logged out' });
 }));
 
@@ -31,6 +34,7 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
 
 router.post('/change-password', authenticate, validate(changePasswordSchema), asyncHandler(async (req, res) => {
   await authService.changePassword(req.user!.sub, req.body.currentPassword, req.body.newPassword);
+  await auditService.log({ action: 'change_password', resource: 'auth', userId: req.user!.sub, ipAddress: req.ip });
   res.json({ message: 'Password changed successfully' });
 }));
 

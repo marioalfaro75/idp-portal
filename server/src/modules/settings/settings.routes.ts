@@ -7,6 +7,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { PERMISSIONS } from '@idp/shared';
 import * as settingsService from './settings.service';
+import * as auditService from '../audit/audit.service';
 import { checkTerraformAvailable, getTerraformBin, clearTerraformBinCache } from '../deployments/terraform-runner';
 import { extractFirstFile } from '../../utils/zip';
 import { spawn } from 'node:child_process';
@@ -136,6 +137,7 @@ router.post('/terraform/install', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncH
 
   const status = await checkTerraformAvailable();
   logger.info(`Terraform ${version} installed to ${binPath}`);
+  await auditService.log({ action: 'terraform_install', resource: 'settings', userId: req.user!.sub, ipAddress: req.ip, details: { version, binaryPath: binPath } });
   res.json({ ...status, binaryPath: binPath, source: 'system-setting' as const });
 }));
 
@@ -156,6 +158,7 @@ router.put('/terraform/path', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandl
   await settingsService.set('terraform.bin', binPath.trim());
   clearTerraformBinCache();
 
+  await auditService.log({ action: 'terraform_path', resource: 'settings', userId: req.user!.sub, ipAddress: req.ip, details: { binaryPath: binPath.trim(), version: match?.[1] } });
   res.json({
     available: true,
     version: match?.[1],
@@ -195,6 +198,7 @@ router.put('/:key', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandler(async (
     return;
   }
   await settingsService.set(req.params.key, req.body.value);
+  await auditService.log({ action: 'update', resource: 'settings', userId: req.user!.sub, ipAddress: req.ip, details: { key: req.params.key } });
   res.json({ key: req.params.key, value: req.body.value });
 }));
 
@@ -204,6 +208,7 @@ router.delete('/:key', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandler(asyn
     return;
   }
   await settingsService.del(req.params.key);
+  await auditService.log({ action: 'delete', resource: 'settings', userId: req.user!.sub, ipAddress: req.ip, details: { key: req.params.key } });
   res.status(204).end();
 }));
 
