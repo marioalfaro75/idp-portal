@@ -5,6 +5,7 @@ dotenv.config();
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error-handler';
@@ -55,8 +56,9 @@ app.use('/api/help', helpRoutes);
 
 // Health check
 const rootPkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf-8'));
+const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', version: rootPkg.version, timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: `${rootPkg.version}-${commitHash}`, timestamp: new Date().toISOString() });
 });
 
 // Production: serve React SPA from client/dist
