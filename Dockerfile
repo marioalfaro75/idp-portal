@@ -51,8 +51,9 @@ COPY --from=builder /app/client/dist/ client/dist/
 # Copy Prisma schema + seed for migrations/seeding in production
 COPY --from=builder /app/server/prisma/ server/prisma/
 
-# Copy templates directory
+# Copy templates and help articles
 COPY templates/ templates/
+COPY help/ help/
 
 # Re-generate Prisma client in production node_modules
 RUN cd server && npx prisma generate
