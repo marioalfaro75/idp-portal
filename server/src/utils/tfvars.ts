@@ -17,8 +17,8 @@ export function generateTfvarsJson(
     if (!value || !value.trim()) continue;
 
     const def = defMap.get(key);
-    const tfType = def?.type || 'string';
-    result[key] = coerceVariableValue(value, tfType);
+    if (!def) continue; // Skip variables not defined in the template
+    result[key] = coerceVariableValue(value, def.type);
   }
 
   return JSON.stringify(result, null, 2);

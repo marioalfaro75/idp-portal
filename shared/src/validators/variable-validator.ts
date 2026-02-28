@@ -253,6 +253,9 @@ function defaultForType(t: string, fieldName?: string): unknown {
   if (t === 'number') {
     if (name.includes('capacity') || name.includes('count') || name.includes('size')) return 5;
     if (name.includes('port')) return 8080;
+    if (name.includes('expiration') && name.includes('days')) return 90;
+    if (name.includes('days')) return 30;
+    if (name.includes('age') || name.includes('seconds') || name.includes('timeout') || name.includes('ttl')) return 3600;
     return 1;
   }
 
@@ -272,8 +275,17 @@ function defaultForType(t: string, fieldName?: string): unknown {
     return {};
   }
 
-  // list(string) / set(string) → populated array
-  if (/^(?:list|set)\s*\(\s*string\s*\)$/.test(t)) return ['value1', 'value2'];
+  // list(string) / set(string) → field-name-aware arrays
+  if (/^(?:list|set)\s*\(\s*string\s*\)$/.test(t)) {
+    if (name.includes('method')) return ['GET', 'PUT'];
+    if (name.includes('expose') && name.includes('header')) return ['ETag'];
+    if (name.includes('header')) return ['*'];
+    if (name.includes('origin')) return ['https://example.com'];
+    if (name.includes('action')) return ['*'];
+    if (name.includes('protocol')) return ['Http', 'Https'];
+    if (name.includes('cidr') || name.includes('prefix')) return ['10.0.0.0/16'];
+    return ['value1', 'value2'];
+  }
 
   // map(type) → populated object
   const mapMatch = t.match(/^map\s*\(\s*(\w+)\s*\)$/);
@@ -297,9 +309,12 @@ function defaultForType(t: string, fieldName?: string): unknown {
   if (name.includes('version')) return 'latest';
   if (name.includes('description')) return 'Example description';
   if (name.includes('projection')) return 'ALL';
+  if (name.includes('prefix')) return 'logs/';
   if (name.includes('name')) return 'my-resource';
   if (name.includes('key')) return 'my-key';
   if (name.includes('id')) return 'abc-12345';
+  if (name.includes('storage_class') || name.includes('storageclass')) return 'STANDARD_IA';
+  if (name.includes('class')) return 'standard';
   if (name.includes('type')) return 'standard';
   return 'example-value';
 }

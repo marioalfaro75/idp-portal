@@ -19,6 +19,13 @@ function parseRepo(repo: string): { owner: string; repo: string } {
 
 const MAX_LOG_SIZE = 500 * 1024; // 500KB max to avoid SQLite bloat
 
+/** Strip ANSI escape codes and GitHub Actions annotations from log text */
+function stripAnsi(text: string): string {
+  return text
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')   // ANSI escape sequences
+    .replace(/##\[(group|endgroup|error|warning|debug|notice)\]/g, ''); // GitHub annotations
+}
+
 function extractErrorSummary(logText: string): string | null {
   const lines = logText.split('\n');
   for (const line of lines) {
@@ -74,7 +81,8 @@ async function fetchRunLogs(
           repo,
           job_id: job.id,
         });
-        allLogs += (typeof jobLog === 'string' ? jobLog : String(jobLog)) + '\n\n';
+        const rawLog = typeof jobLog === 'string' ? jobLog : String(jobLog);
+        allLogs += stripAnsi(rawLog) + '\n\n';
       } catch {
         allLogs += '(logs unavailable for this job)\n\n';
       }
@@ -158,6 +166,9 @@ async function pushTemplateFiles(
     // Generate typed terraform.tfvars.json
     const tfvarsJson = generateTfvarsJson(variables, templateVarDefs);
     files.push({ path: 'terraform/terraform.tfvars.json', content: tfvarsJson });
+
+    // Push empty terraform.tfvars to overwrite any stale HCL tfvars from previous deployments
+    files.push({ path: 'terraform/terraform.tfvars', content: '# Variables are defined in terraform.tfvars.json\n' });
 
     emitter.emit('log', { type: 'status', message: `Pushing ${files.length} template files to ${owner}/${repo}/terraform/` });
     await pushScaffoldFiles(owner, repo, files);
