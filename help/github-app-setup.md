@@ -37,8 +37,9 @@ The App provides centralized, secure authentication using short-lived installati
 
 | Section | Permission | Access Level | Used For |
 |---------|-----------|-------------|----------|
-| **Repository** | Contents | **Read & write** | Pushing template files, reading/fixing workflow YAML |
+| **Repository** | Contents | **Read & write** | Pushing template files, reading workflow YAML |
 | **Repository** | Actions | **Read & write** | Dispatching workflows, polling run status, fetching logs |
+| **Repository** | Workflows | **Read & write** | Auto-fixing workflow YAML (committing changes to `.github/workflows/`) |
 | **Repository** | Secrets | **Read & write** | Pushing cloud credentials as repo secrets |
 | **Organization** | Administration | **Read & write** | Creating repositories for service scaffolding (`repos.createInOrg`) |
 | **Organization** | Members | **Read-only** | Listing organization members |
@@ -240,7 +241,7 @@ Artifacts are named `terraform-state-{deployment_id}`, so each deployment's stat
 | "GitHub App is not configured" | No App ID / Installation ID / Private Key saved | Complete the configuration in Portal Administration |
 | "Bad credentials" (401) | Invalid App ID or private key | Verify the App ID matches what's shown in GitHub App settings. Regenerate the private key and paste the full `.pem` contents |
 | "Integration not found" (404) | Invalid Installation ID | Check the installation URL in GitHub — the number at the end is the Installation ID |
-| "Resource not accessible by integration" (403) | Missing permissions | Check the App's permissions in GitHub settings. Ensure Contents, Actions, Secrets are all Read & Write |
+| "Resource not accessible by integration" (403) | Missing permissions | Check the App's permissions in GitHub settings. Ensure Contents, Actions, Workflows, and Secrets are all Read & Write |
 | "Workflow does not have 'workflow_dispatch' trigger" | Workflow couldn't be auto-fixed | This shouldn't normally happen, but check that the workflow file exists on the specified branch |
 | Workflow dispatched but never starts | Branch protection or required checks blocking | Check the repo's branch protection rules and ensure the workflow file exists on the target branch |
 | Deployment stuck in "dispatched" | Run ID not found after 10 minutes | The portal auto-fails these. Check GitHub Actions tab in the repo for the actual run status |
