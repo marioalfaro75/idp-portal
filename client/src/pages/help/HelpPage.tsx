@@ -20,12 +20,12 @@ const markdownComponents: Components = {
     <thead className="bg-gray-50 dark:bg-gray-800/50" {...props}>{children}</thead>
   ),
   th: ({ children, ...props }) => (
-    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider" {...props}>
+    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-200 uppercase tracking-wider" {...props}>
       {children}
     </th>
   ),
   td: ({ children, ...props }) => (
-    <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-700/50" {...props}>
+    <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 border-t border-gray-100 dark:border-gray-700/50" {...props}>
       {children}
     </td>
   ),
@@ -81,12 +81,12 @@ const markdownComponents: Components = {
     </ol>
   ),
   li: ({ children, ...props }) => (
-    <li className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed" {...props}>
+    <li className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed" {...props}>
       {children}
     </li>
   ),
   p: ({ children, ...props }) => (
-    <p className="my-2.5 text-sm leading-relaxed text-gray-700 dark:text-gray-300" {...props}>
+    <p className="my-2.5 text-sm leading-relaxed text-gray-700 dark:text-gray-200" {...props}>
       {children}
     </p>
   ),
@@ -269,7 +269,7 @@ export function HelpPage() {
                         </button>
                         <button
                           onClick={() => setOpenArticle(article)}
-                          className="flex-1 flex items-center gap-3 py-4 pr-4 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors min-w-0"
+                          className="flex-1 flex items-center gap-3 py-4 pr-4 text-left hover:bg-primary-50 dark:hover:bg-gray-700 transition-colors min-w-0"
                         >
                           <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                             {article.title}
@@ -282,7 +282,7 @@ export function HelpPage() {
                         </button>
                       </div>
                       {isExpanded && (
-                        <div className="px-6 pb-5 pt-1 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-850/50">
+                        <div className="px-6 pb-5 pt-1 border-t border-gray-100 dark:border-gray-700/50">
                           <div className="max-w-none">
                             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                               {article.content}
