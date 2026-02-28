@@ -165,7 +165,7 @@ export function Sidebar() {
     });
 
   return (
-    <aside className={`fixed top-0 left-0 h-full bg-gray-900 text-white transition-all duration-300 z-40 ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
+    <aside className={`fixed top-0 left-0 h-full bg-gray-900 text-white transition-all duration-300 z-40 flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-800">
         {!sidebarCollapsed && <span className="text-lg font-bold">IDP Portal</span>}
         <div className="flex items-center gap-1">
@@ -183,7 +183,7 @@ export function Sidebar() {
           </button>
         </div>
       </div>
-      <nav className="mt-4 px-2 space-y-1">
+      <nav className="flex-1 overflow-y-auto mt-4 px-2 space-y-1">
         {menuEditMode && !sidebarCollapsed ? (
           <DndContext
             sensors={sensors}
@@ -199,6 +199,9 @@ export function Sidebar() {
           renderNavItems()
         )}
       </nav>
+      <div className="border-t border-gray-800 px-3 py-2">
+        {!sidebarCollapsed && <span className="text-xs text-gray-500">v{__APP_VERSION__}</span>}
+      </div>
     </aside>
   );
 }

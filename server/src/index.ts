@@ -4,6 +4,7 @@ dotenv.config();
 
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error-handler';
@@ -53,8 +54,9 @@ app.use('/api/federation', federationRoutes);
 app.use('/api/help', helpRoutes);
 
 // Health check
+const rootPkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf-8'));
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: rootPkg.version, timestamp: new Date().toISOString() });
 });
 
 // Production: serve React SPA from client/dist

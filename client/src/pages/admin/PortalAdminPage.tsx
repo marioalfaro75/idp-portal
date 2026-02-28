@@ -740,6 +740,10 @@ function PortalAdminContent() {
 
       <Card title="System Info">
         <dl className="space-y-2">
+          <div className="flex gap-4">
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">App Version</dt>
+            <dd className="text-sm">{__APP_VERSION__}</dd>
+          </div>
           {Object.entries(settings).filter(([k]) => !k.startsWith('github.')).map(([key, value]) => (
             <div key={key} className="flex gap-4">
               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">{key}</dt>
