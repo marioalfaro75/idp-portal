@@ -114,6 +114,7 @@ model Deployment {
   planOutput        String?
   applyOutput       String?
   destroyOutput     String?
+  scanOutput        String?
   outputs           String?  // JSON of terraform outputs
   terraformState    String?  // terraform state file content
   errorMessage      String?

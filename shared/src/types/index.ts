@@ -10,3 +10,4 @@ export * from './group';
 export * from './federation';
 export * from './help';
 export * from './updates';
+export * from './security';

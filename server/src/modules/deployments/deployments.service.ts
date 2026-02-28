@@ -64,7 +64,7 @@ export async function get(id: string, user?: UserContext) {
   return formatDeployment(deployment);
 }
 
-export async function create(data: { name: string; templateId: string; cloudConnectionId: string; variables: Record<string, string>; executionMethod?: string; githubRepo?: string; githubWorkflowId?: string; githubRef?: string }, user: UserContext) {
+export async function create(data: { name: string; templateId: string; cloudConnectionId: string; variables: Record<string, string>; scanOutput?: string; executionMethod?: string; githubRepo?: string; githubWorkflowId?: string; githubRef?: string }, user: UserContext) {
   const template = await prisma.template.findUnique({ where: { id: data.templateId } });
   if (!template) throw new NotFoundError('Template');
 
@@ -95,6 +95,7 @@ export async function create(data: { name: string; templateId: string; cloudConn
       templateId: data.templateId,
       cloudConnectionId: data.cloudConnectionId,
       variables: JSON.stringify(data.variables),
+      scanOutput: data.scanOutput || null,
       executionMethod,
       githubRepo: data.githubRepo || null,
       githubWorkflowId: data.githubWorkflowId || null,
@@ -413,6 +414,7 @@ function formatDeployment(d: any) {
     planOutput: d.planOutput,
     applyOutput: d.applyOutput,
     destroyOutput: d.destroyOutput,
+    scanOutput: d.scanOutput || null,
     outputs: d.outputs ? JSON.parse(d.outputs) : null,
     errorMessage: d.errorMessage,
     executionMethod: d.executionMethod || 'local',

@@ -25,6 +25,7 @@ export interface Deployment {
   applyOutput: string | null;
   destroyOutput: string | null;
   outputs: Record<string, string> | null;
+  scanOutput: string | null;
   errorMessage: string | null;
   executionMethod: 'local' | 'github';
   githubRepo?: string | null;
@@ -40,6 +41,7 @@ export interface CreateDeploymentRequest {
   templateId: string;
   cloudConnectionId: string;
   variables: Record<string, string>;
+  scanOutput?: string;
   executionMethod: 'local' | 'github';
   githubRepo?: string;
   githubWorkflowId?: string;

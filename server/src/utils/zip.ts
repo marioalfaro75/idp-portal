@@ -81,3 +81,24 @@ export function extractFirstFile(zipBuffer: Buffer): Buffer {
 
   return extractEntry(zipBuffer, entry);
 }
+
+/**
+ * Extract a specific file from a ZIP buffer by name.
+ * Falls back to the largest entry if name is not provided.
+ */
+export function extractFileFromZip(zipBuffer: Buffer, name?: string): Buffer {
+  const entries = parseCentralDirectory(zipBuffer);
+  if (entries.length === 0) {
+    throw new Error('ZIP archive is empty');
+  }
+
+  if (name) {
+    const entry = entries.find(e => e.fileName === name || e.fileName.endsWith('/' + name));
+    if (!entry) {
+      throw new Error(`File "${name}" not found in ZIP archive`);
+    }
+    return extractEntry(zipBuffer, entry);
+  }
+
+  return extractEntry(zipBuffer, entries.reduce((a, b) => a.compressedSize > b.compressedSize ? a : b));
+}

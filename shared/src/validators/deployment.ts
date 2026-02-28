@@ -5,6 +5,7 @@ export const createDeploymentSchema = z.object({
   templateId: z.string().min(1),
   cloudConnectionId: z.string().min(1),
   variables: z.record(z.string(), z.string()),
+  scanOutput: z.string().optional(),
   executionMethod: z.enum(['local', 'github']).default('local'),
   githubRepo: z.string().optional(),
   githubWorkflowId: z.string().optional(),

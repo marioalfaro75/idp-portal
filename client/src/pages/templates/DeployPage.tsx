@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { templatesApi } from '../../api/templates';
@@ -6,14 +6,22 @@ import { cloudConnectionsApi } from '../../api/cloud-connections';
 import { deploymentsApi } from '../../api/deployments';
 import { githubApi } from '../../api/github';
 import { settingsApi } from '../../api/settings';
+import { securityApi } from '../../api/security';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { DynamicForm } from '../../components/forms/DynamicForm';
+import { SecurityScanModal } from '../../components/security/SecurityScanModal';
 import { ArrowLeft, Rocket } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { validateVariables } from '@idp/shared';
+import type { SecurityScanResult } from '@idp/shared';
+
+type ScanState =
+  | { status: 'scanning' }
+  | { status: 'done'; result: SecurityScanResult }
+  | { status: 'error'; message: string };
 
 export function DeployPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -27,6 +35,12 @@ export function DeployPage() {
   const [githubRepo, setGithubRepo] = useState('');
   const [githubWorkflowId, setGithubWorkflowId] = useState('');
   const [githubRef, setGithubRef] = useState('main');
+
+  // Security scan state
+  const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [scanState, setScanState] = useState<ScanState>({ status: 'scanning' });
+  const [deploying, setDeploying] = useState(false);
+  const scanResultRef = useRef<SecurityScanResult | null>(null);
 
   const { data: template } = useQuery({
     queryKey: ['template', slug],
@@ -92,6 +106,41 @@ export function DeployPage() {
 
   const filteredConnections = connections.filter((c) => c.provider === template?.provider);
 
+  const createDeployment = async (scanOutput?: string) => {
+    if (!template) return;
+    setDeploying(true);
+    try {
+      const deployment = await deploymentsApi.create({
+        name,
+        templateId: template.id,
+        cloudConnectionId: connectionId,
+        variables,
+        scanOutput,
+        executionMethod,
+        ...(executionMethod === 'github' && {
+          githubRepo,
+          githubWorkflowId,
+          githubRef,
+        }),
+      });
+      toast.success('Deployment started!');
+      setScanModalOpen(false);
+      navigate(`/deployments/${deployment.id}`);
+    } catch (err: any) {
+      const errorData = err.response?.data?.error;
+      if (errorData?.details && typeof errorData.details === 'object') {
+        setVarErrors(errorData.details);
+        toast.error(errorData.message || 'Variable validation failed');
+      } else {
+        toast.error(errorData?.message || 'Deployment failed');
+      }
+      setScanModalOpen(false);
+    } finally {
+      setDeploying(false);
+      setLoading(false);
+    }
+  };
+
   const handleDeploy = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!template) return;
@@ -104,34 +153,34 @@ export function DeployPage() {
       return;
     }
     setVarErrors({});
-
     setLoading(true);
+
+    // Run security scan first
+    setScanState({ status: 'scanning' });
+    setScanModalOpen(true);
+    scanResultRef.current = null;
+
     try {
-      const deployment = await deploymentsApi.create({
-        name,
-        templateId: template.id,
-        cloudConnectionId: connectionId,
-        variables,
-        executionMethod,
-        ...(executionMethod === 'github' && {
-          githubRepo,
-          githubWorkflowId,
-          githubRef,
-        }),
-      });
-      toast.success('Deployment started!');
-      navigate(`/deployments/${deployment.id}`);
-    } catch (err: any) {
-      const errorData = err.response?.data?.error;
-      if (errorData?.details && typeof errorData.details === 'object') {
-        setVarErrors(errorData.details);
-        toast.error(errorData.message || 'Variable validation failed');
-      } else {
-        toast.error(errorData?.message || 'Deployment failed');
+      const result = await securityApi.scan(template.id, variables);
+      scanResultRef.current = result;
+
+      // If scanning is disabled (scanDuration=0, no tools ran), skip modal and deploy directly
+      if (result.scanDuration === 0 && !result.trivy.available && !result.tflint.available && !result.opa.available) {
+        setScanModalOpen(false);
+        await createDeployment();
+        return;
       }
-    } finally {
-      setLoading(false);
+
+      setScanState({ status: 'done', result });
+    } catch (err: any) {
+      const message = err.response?.data?.error?.message || err.message || 'Security scan failed';
+      setScanState({ status: 'error', message });
     }
+  };
+
+  const handleDeployFromModal = () => {
+    const scanOutput = scanResultRef.current ? JSON.stringify(scanResultRef.current) : undefined;
+    createDeployment(scanOutput);
   };
 
   if (!template) {
@@ -244,6 +293,14 @@ export function DeployPage() {
           </Button>
         </div>
       </form>
+
+      <SecurityScanModal
+        open={scanModalOpen}
+        onClose={() => { setScanModalOpen(false); setLoading(false); }}
+        scanState={scanState}
+        onDeploy={handleDeployFromModal}
+        deploying={deploying}
+      />
     </div>
   );
 }

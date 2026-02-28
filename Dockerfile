@@ -47,6 +47,23 @@ RUN apk add --no-cache unzip && \
     rm /tmp/terraform.zip && \
     terraform version
 
+# Install security scanning tools: Trivy, TFLint, Conftest
+RUN ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') && \
+    TRIVY_ARCH=$(echo ${ARCH} | sed 's/amd64/64bit/' | sed 's/arm64/ARM64/') && \
+    wget -q "https://github.com/aquasecurity/trivy/releases/download/v0.58.0/trivy_0.58.0_Linux-${TRIVY_ARCH}.tar.gz" -O /tmp/trivy.tar.gz && \
+    tar xzf /tmp/trivy.tar.gz -C /usr/local/bin/ trivy && \
+    rm /tmp/trivy.tar.gz && \
+    trivy --version && \
+    wget -q "https://github.com/terraform-linters/tflint/releases/download/v0.54.0/tflint_linux_${ARCH}.zip" -O /tmp/tflint.zip && \
+    unzip /tmp/tflint.zip -d /usr/local/bin/ && \
+    rm /tmp/tflint.zip && \
+    tflint --version && \
+    CONFTEST_ARCH=$(echo ${ARCH} | sed 's/amd64/x86_64/') && \
+    wget -q "https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_${CONFTEST_ARCH}.tar.gz" -O /tmp/conftest.tar.gz && \
+    tar xzf /tmp/conftest.tar.gz -C /usr/local/bin/ conftest && \
+    rm /tmp/conftest.tar.gz && \
+    conftest --version
+
 WORKDIR /app
 
 # Copy workspace package files for production install

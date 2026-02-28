@@ -5,6 +5,7 @@ import { federationApi } from '../../api/federation';
 import { githubApi } from '../../api/github';
 import { rolesApi } from '../../api/roles';
 import { updatesApi } from '../../api/updates';
+import { securityApi } from '../../api/security';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -13,9 +14,9 @@ import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { RoleGuard } from '../../components/guards/RoleGuard';
 import { PERMISSIONS } from '@idp/shared';
-import { Plus, Pencil, Trash2, Copy, Check, RefreshCw, CheckCircle, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, Check, RefreshCw, CheckCircle, AlertTriangle, ExternalLink, Shield, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { UpdateCheckResult } from '@idp/shared';
+import type { UpdateCheckResult, SecurityConfig, SecurityToolStatus, SecuritySeverity } from '@idp/shared';
 import type {
   FederationProviderAdmin,
   FederationProviderDetail,
@@ -669,6 +670,174 @@ function GitHubAppCard() {
   );
 }
 
+// --- Security Scanning Card ---
+
+function SecurityScanningCard() {
+  const queryClient = useQueryClient();
+  const [configForm, setConfigForm] = useState<Partial<SecurityConfig> | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  const { data: config, isLoading: loadingConfig } = useQuery({
+    queryKey: ['securityConfig'],
+    queryFn: securityApi.getConfig,
+    retry: false,
+  });
+
+  const { data: tools = [], isLoading: loadingTools } = useQuery({
+    queryKey: ['securityTools'],
+    queryFn: securityApi.getToolsStatus,
+    retry: false,
+  });
+
+  const installMutation = useMutation({
+    mutationFn: (tool: 'trivy' | 'tflint' | 'conftest') => securityApi.installTool(tool),
+    onSuccess: (_data, tool) => {
+      toast.success(`${tool} installed successfully`);
+      queryClient.invalidateQueries({ queryKey: ['securityTools'] });
+    },
+    onError: (err: any, tool) => {
+      toast.error(err.response?.data?.error?.message || `Failed to install ${tool}`);
+    },
+  });
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      const updates = configForm || {};
+      const result = await securityApi.updateConfig(updates);
+      setConfigForm({
+        enabled: result.enabled,
+        enforcement: result.enforcement,
+        severityThreshold: result.severityThreshold,
+        opaPolicy: result.opaPolicy,
+      });
+      queryClient.invalidateQueries({ queryKey: ['securityConfig'] });
+      toast.success('Security scanning configuration saved');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Failed to save configuration');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const effectiveEnabled = configForm?.enabled ?? config?.enabled ?? false;
+  const effectiveEnforcement = configForm?.enforcement ?? config?.enforcement ?? 'blocking';
+  const effectiveThreshold = configForm?.severityThreshold ?? config?.severityThreshold ?? 'HIGH';
+  const effectivePolicy = configForm?.opaPolicy ?? config?.opaPolicy ?? '';
+
+  return (
+    <Card title="Security Scanning">
+      <div className="space-y-6">
+        {/* Enable/Disable + Enforcement */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Enable Security Scanning</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Run Trivy, TFLint, and OPA checks before deployments</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={effectiveEnabled}
+                onChange={(e) => setConfigForm({ ...(configForm || {}), enabled: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600" />
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Block on Failure</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">When enabled, failed scans prevent deployment</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={effectiveEnforcement === 'blocking'}
+                onChange={(e) => setConfigForm({ ...(configForm || {}), enforcement: e.target.checked ? 'blocking' : 'advisory' })}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600" />
+            </label>
+          </div>
+
+          <Select
+            label="Severity Threshold"
+            options={[
+              { value: 'CRITICAL', label: 'Critical only' },
+              { value: 'HIGH', label: 'High and above' },
+              { value: 'MEDIUM', label: 'Medium and above' },
+              { value: 'LOW', label: 'Low and above' },
+              { value: 'INFO', label: 'All findings' },
+            ]}
+            value={effectiveThreshold}
+            onChange={(e) => setConfigForm({ ...(configForm || {}), severityThreshold: e.target.value as SecuritySeverity })}
+          />
+        </div>
+
+        {/* Tool Status */}
+        <div className="border-t dark:border-gray-700 pt-4">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Tool Status</h4>
+          {loadingTools ? (
+            <div className="flex justify-center py-3"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600" /></div>
+          ) : (
+            <div className="space-y-2">
+              {tools.map((tool: SecurityToolStatus) => (
+                <div key={tool.name} className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Shield className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <span className="text-sm font-medium">{tool.name}</span>
+                      {tool.available && tool.version && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">v{tool.version}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {tool.available ? (
+                      <Badge variant="success">Installed</Badge>
+                    ) : (
+                      <>
+                        <Badge>Not installed</Badge>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => installMutation.mutate(tool.name as 'trivy' | 'tflint' | 'conftest')}
+                          loading={installMutation.isPending && installMutation.variables === tool.name}
+                          disabled={installMutation.isPending}
+                        >
+                          <Download className="w-3.5 h-3.5 mr-1" />
+                          Install
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* OPA Policy */}
+        <div className="border-t dark:border-gray-700 pt-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">OPA/Rego Policy</label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Custom Rego policy evaluated by Conftest against Terraform files</p>
+          <textarea
+            className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100 font-mono"
+            rows={8}
+            value={effectivePolicy}
+            onChange={(e) => setConfigForm({ ...(configForm || {}), opaPolicy: e.target.value })}
+            placeholder={'package main\n\ndeny[msg] {\n  input.resource.aws_s3_bucket[name]\n  not input.resource.aws_s3_bucket[name].server_side_encryption_configuration\n  msg := sprintf("S3 bucket %s must have encryption enabled", [name])\n}'}
+          />
+        </div>
+
+        <Button onClick={handleSaveConfig} loading={savingConfig}>Save Security Settings</Button>
+      </div>
+    </Card>
+  );
+}
+
 // --- Main Content ---
 
 function PortalAdminContent() {
@@ -804,6 +973,8 @@ function PortalAdminContent() {
       <ProviderModal open={modalOpen} onClose={() => { setModalOpen(false); setEditingId(null); }} editingId={editingId} />
 
       <GitHubAppCard />
+
+      <SecurityScanningCard />
 
       <Card title="GitHub Actions Defaults">
         <div className="space-y-4 max-w-lg">

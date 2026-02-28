@@ -28,6 +28,8 @@ import { pollWorkflowRuns } from './modules/services/workflow-poller';
 import { migrateLegacyOidc } from './modules/federation/federation.service';
 import helpRoutes from './modules/help/help.routes';
 import updatesRoutes from './modules/updates/updates.routes';
+import securityRoutes from './modules/security/security.routes';
+import { logToolAvailability } from './modules/security/security-tools';
 import { getBuildInfo } from './utils/build-info';
 
 const app = express();
@@ -54,6 +56,7 @@ app.use('/api/groups', groupsRoutes);
 app.use('/api/federation', federationRoutes);
 app.use('/api/help', helpRoutes);
 app.use('/api/updates', updatesRoutes);
+app.use('/api/security', securityRoutes);
 
 // Health check
 const buildInfo = getBuildInfo();
@@ -80,6 +83,9 @@ app.listen(PORT, () => {
     if (available) logger.info(`Terraform available: v${version}`);
     else logger.warn('Terraform not found. Local deployments will fail. Install terraform or set TERRAFORM_BIN.');
   });
+
+  // Check security tool availability
+  logToolAvailability().catch(() => {});
 
   // Migrate legacy OIDC settings to federation providers
   migrateLegacyOidc().catch((err) => logger.error('Legacy OIDC migration failed', { error: (err as Error).message }));
