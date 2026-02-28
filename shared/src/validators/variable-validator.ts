@@ -151,6 +151,18 @@ export function generateTypeExample(tfType: string, variableName?: string): stri
       if (varName.includes('setting') || varName.includes('env') || varName.includes('variable')) {
         return JSON.stringify({ LOG_LEVEL: 'info', APP_ENV: 'production' }, null, 2);
       }
+      if (varName.includes('dimension')) {
+        return JSON.stringify({ InstanceId: 'i-1234567890abcdef0' }, null, 2);
+      }
+      if (varName.includes('deploy') || varName.includes('configuration')) {
+        return JSON.stringify({ ClusterName: 'my-cluster', ServiceName: 'my-service' }, null, 2);
+      }
+      if (varName.includes('named_value')) {
+        return JSON.stringify({ BackendUrl: 'https://api.example.com', RateLimit: '100' }, null, 2);
+      }
+      if (varName.includes('secret')) {
+        return JSON.stringify({ DATABASE_URL: '<secret-value>', API_KEY: '<secret-value>' }, null, 2);
+      }
       return JSON.stringify({ key1: 'value1', key2: 'value2' }, null, 2);
     }
     if (innerType === 'number') {
@@ -256,6 +268,11 @@ function defaultForType(t: string, fieldName?: string): unknown {
     if (name.includes('expiration') && name.includes('days')) return 90;
     if (name.includes('days')) return 30;
     if (name.includes('age') || name.includes('seconds') || name.includes('timeout') || name.includes('ttl')) return 3600;
+    if (name.includes('threshold')) return 80;
+    if (name.includes('period') && !name.includes('days')) return 300;
+    if (name.includes('severity')) return 2;
+    if (name.includes('quota')) return 50;
+    if (name.includes('interval')) return 300;
     return 1;
   }
 
@@ -284,6 +301,13 @@ function defaultForType(t: string, fieldName?: string): unknown {
     if (name.includes('action')) return ['*'];
     if (name.includes('protocol')) return ['Http', 'Https'];
     if (name.includes('cidr') || name.includes('prefix')) return ['10.0.0.0/16'];
+    if (name.includes('permission')) return ['Get', 'List', 'Create'];
+    if (name.includes('operations')) return ['Encrypt', 'Decrypt'];
+    if (name.includes('scope')) return ['/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-rg'];
+    if (name.includes('log_categor') || name.includes('metric_categor')) return ['AllMetrics'];
+    if (name.includes('event_type')) return ['Error', 'Warning'];
+    if (name.includes('path_pattern') || name.includes('patterns')) return ['/static/*', '/images/*'];
+    if (name.includes('service')) return ['Microsoft.Storage', 'Microsoft.Sql'];
     return ['value1', 'value2'];
   }
 
@@ -300,21 +324,91 @@ function defaultForType(t: string, fieldName?: string): unknown {
   if (t.startsWith('map')) return {};
 
   // String type — use field name patterns for realistic values
+  // Order matters: more specific patterns must come before generic ones.
+
+  // Secrets / sensitive
   if (name.includes('secret') || name.includes('password') || name.includes('token')) return '<secret-value>';
+
+  // ARNs and cloud resource identifiers
   if (name.includes('arn')) return 'arn:aws:iam::123456789012:role/example-role';
+  if (name.includes('grantee_principal')) return 'arn:aws:iam::123456789012:role/app-role';
+  if (name.includes('principal_id') || name.includes('object_id')) return '00000000-0000-0000-0000-000000000000';
+  if (name.includes('resource_id') || name.includes('target_resource')) return '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-rg/providers/Microsoft.Compute/virtualMachines/my-vm';
+
+  // Contact / communication
   if (name.includes('email')) return 'user@example.com';
+  if (name.includes('uri')) return 'https://example.com/webhook';
   if (name.includes('url') || name.includes('endpoint')) return 'https://example.com';
+
+  // IP addresses
+  if (name.includes('start_ip')) return '203.0.113.0';
+  if (name.includes('end_ip')) return '203.0.113.255';
+
+  // Networking
   if (name.includes('cidr')) return '10.0.0.0/16';
+
+  // Cloud locations
+  if (name.includes('location') && !name.includes('log')) return 'eastus2';
   if (name.includes('region')) return 'us-east-1';
+
+  // Monitoring / observability
+  if (name.includes('comparison_operator')) return 'GreaterThanOrEqualToThreshold';
+  if (name.includes('statistic')) return 'Average';
+  if (name.includes('aggregation')) return 'Average';
+  if (name === 'operator') return 'GreaterThan';
+  if (name.includes('treat_missing')) return 'missing';
+  if (name.includes('frequency')) return 'PT5M';
+  if (name.includes('window_size')) return 'PT15M';
+  if (name.includes('cache_duration')) return '1.00:00:00';
+  if (name.includes('metric_namespace') || name === 'namespace') return 'AWS/EC2';
+  if (name.includes('metric_name')) return 'CPUUtilization';
+  if (name.includes('operation_name')) return 'Microsoft.Compute/virtualMachines/write';
+
+  // IAM / RBAC (before generic *name*, *id*)
+  if (name === 'effect') return 'Allow';
+  if (name.includes('role_definition_name')) return 'Contributor';
+  if (name.includes('service_account') && !name.includes('scope')) return 'my-app@my-project.iam.gserviceaccount.com';
+  if (name === 'member') return 'user:admin@example.com';
+  if (name === 'role') return 'roles/editor';
+  if (name === 'role_id') return 'customStorageViewer';
+
+  // Database-specific (before generic *type*)
+  if (name.includes('hash_key_type') || name.includes('range_key_type')) return 'S';
+  if (name.includes('projection_type')) return 'ALL';
+  if (name.includes('stream_view_type')) return 'NEW_AND_OLD_IMAGES';
+
+  // Cloud resource types / kinds (before generic *type*)
+  if (name.includes('action_type')) return 'Delete';
+  if (name.includes('access_type')) return 'private';
+  if (name === 'kind') return 'CanNotDelete';
+
+  // Activity / severity levels
+  if (name === 'level') return 'Warning';
+  if (name === 'category') return 'Administrative';
+
+  // Logging / filtering
+  if (name === 'pattern') return 'ERROR';
+  if (name === 'filter') return 'severity >= WARNING';
+
+  // Display names / titles (before generic *name*)
+  if (name.includes('display_name')) return 'My Application';
+  if (name.includes('title')) return 'My Custom Resource';
+  if (name.includes('query_string')) return 'fields @timestamp, @message | filter @message like /ERROR/ | limit 20';
+  if (name.includes('collection')) return 'users';
+  if (name.includes('field_path')) return 'status';
+
+  // Existing generic patterns
   if (name.includes('version')) return 'latest';
   if (name.includes('description')) return 'Example description';
   if (name.includes('projection')) return 'ALL';
   if (name.includes('prefix')) return 'logs/';
+  if (name.includes('storage_class') || name.includes('storageclass')) return 'STANDARD_IA';
+  if (name.includes('class')) return 'standard';
+
+  // Generic identifiers (broadest matchers last)
   if (name.includes('name')) return 'my-resource';
   if (name.includes('key')) return 'my-key';
   if (name.includes('id')) return 'abc-12345';
-  if (name.includes('storage_class') || name.includes('storageclass')) return 'STANDARD_IA';
-  if (name.includes('class')) return 'standard';
   if (name.includes('type')) return 'standard';
   return 'example-value';
 }
@@ -327,6 +421,8 @@ const PLACEHOLDER_PATTERNS = [
   'my-resource',
   'my-key',
   'arn:aws:iam::123456789012:role/example-role',
+  '00000000-0000-0000-0000-000000000000',
+  'my-app@my-project.iam.gserviceaccount.com',
 ];
 
 /**
