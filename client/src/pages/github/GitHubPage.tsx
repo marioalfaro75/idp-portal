@@ -68,7 +68,7 @@ export function GitHubPage() {
           <div className="space-y-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               A Portal Admin needs to configure the GitHub App in the{' '}
-              <Link to="/admin" className="text-primary-600 hover:underline font-medium">Portal Administration</Link>{' '}
+              <Link to="/admin/portal" className="text-primary-600 hover:underline font-medium">Portal Administration</Link>{' '}
               page before GitHub features can be used.
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
