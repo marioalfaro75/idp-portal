@@ -319,6 +319,26 @@ function defaultForType(t: string, fieldName?: string): unknown {
   return 'example-value';
 }
 
+/** Known placeholder strings used in auto-generated examples */
+const PLACEHOLDER_PATTERNS = [
+  'example-value',
+  'abc-12345',
+  '<secret-value>',
+  'my-resource',
+  'my-key',
+  'arn:aws:iam::123456789012:role/example-role',
+];
+
+/**
+ * Check if a complex type field value contains auto-generated placeholder values.
+ * Returns true if the value likely contains unmodified example data.
+ */
+export function containsPlaceholderValues(value: string): boolean {
+  if (!value || !value.trim()) return false;
+  const lower = value.toLowerCase();
+  return PLACEHOLDER_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
+}
+
 /**
  * Convert a string value to a properly typed value for Terraform tfvars.
  */

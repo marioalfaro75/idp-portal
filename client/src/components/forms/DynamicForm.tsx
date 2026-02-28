@@ -3,7 +3,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import type { TemplateVariable } from '@idp/shared';
-import { getBaseType, parseContainsValidation, validateVariables, generateTypeExample } from '@idp/shared';
+import { getBaseType, parseContainsValidation, validateVariables, generateTypeExample, containsPlaceholderValues } from '@idp/shared';
 
 interface DynamicFormProps {
   variables: TemplateVariable[];
@@ -130,13 +130,14 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
           const rows = Math.min(10, Math.max(3, placeholder.split('\n').length));
           const isExpanded = expandedExamples.has(v.name);
           const isEmpty = !values[v.name];
+          const hasPlaceholders = !isEmpty && containsPlaceholderValues(values[v.name]);
           return (
             <div key={v.name}>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {label}
               </label>
               <textarea
-                className={`block w-full rounded-lg border ${fieldError ? 'border-red-300' : 'border-gray-300 dark:border-gray-600'} px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100 dark:focus:border-primary-400 font-mono`}
+                className={`block w-full rounded-lg border ${fieldError ? 'border-red-300' : hasPlaceholders ? 'border-amber-400 dark:border-amber-500' : 'border-gray-300 dark:border-gray-600'} px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none dark:bg-gray-800 dark:text-gray-100 dark:focus:border-primary-400 font-mono`}
                 rows={rows}
                 placeholder={v.default || placeholder}
                 value={values[v.name] || ''}
@@ -144,6 +145,11 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
                 onBlur={() => handleBlur(v.name)}
               />
               {fieldError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{fieldError}</p>}
+              {hasPlaceholders && !fieldError && (
+                <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+                  This field contains example values. Edit them with real values before deploying.
+                </p>
+              )}
               {v.description && (
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{v.description}</p>
               )}
@@ -163,13 +169,18 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
                         {typeExample}
                       </pre>
                       {isEmpty && (
-                        <button
-                          type="button"
-                          onClick={() => handleChange(v.name, typeExample)}
-                          className="mt-1.5 px-2.5 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/30"
-                        >
-                          Insert
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleChange(v.name, typeExample)}
+                            className="mt-1.5 px-2.5 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/30"
+                          >
+                            Insert template
+                          </button>
+                          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                            Edit the example values before deploying
+                          </p>
+                        </>
                       )}
                     </div>
                   )}
@@ -215,13 +226,18 @@ export function DynamicForm({ variables, values, onChange, errors = {} }: Dynami
                       Comma-separated or JSON array format accepted
                     </p>
                     {isListEmpty && (
-                      <button
-                        type="button"
-                        onClick={() => handleChange(v.name, listExample)}
-                        className="mt-1.5 px-2.5 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/30"
-                      >
-                        Insert
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleChange(v.name, listExample)}
+                          className="mt-1.5 px-2.5 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/30"
+                        >
+                          Insert template
+                        </button>
+                        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                          Edit the example values before deploying
+                        </p>
+                      </>
                     )}
                   </div>
                 )}
