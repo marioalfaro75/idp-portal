@@ -47,7 +47,7 @@ Each feature follows this structure in `server/src/modules/{feature}/`:
 - `{feature}.service.ts` — Business logic
 - `{feature}.validators.ts` — Zod schemas (or re-exports from shared)
 
-Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups.
+Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups, help.
 
 ### Client Structure
 
@@ -66,9 +66,9 @@ Path alias: `@/*` maps to `client/src/*`.
 
 **Federation**: Multi-provider identity federation in `server/src/modules/federation/`. `FederationProvider` Prisma model stores per-provider encrypted config (AES-256-GCM). Dynamic routes at `/api/federation/:slug/login` and `/api/federation/:slug/callback`. Uses `openid-client` for OIDC and `@node-saml/node-saml` for SAML 2.0. OIDC state CSRF protection via `federation_state` httpOnly cookie (requires `cookie-parser` middleware). All callbacks redirect to `{CLIENT_URL}/auth/callback?token=...&user=...` (same format as `OAuthCallbackPage.tsx` expects). Admin CRUD at `/api/federation/admin/providers` (PORTAL_ADMIN permission). Legacy `oidc.*` SystemSettings auto-migrate to FederationProvider on startup.
 
-**RBAC**: 20 permissions, 3 system roles (Admin, Editor, Viewer), custom roles supported. Server enforces via `authorize()` middleware; client uses `<RoleGuard>` for UI only.
+**RBAC**: 20 permissions, 4 system roles (Portal Admin, Admin, Editor, Viewer), custom roles supported. Server enforces via `authorize()` middleware; client uses `<RoleGuard>` for UI only.
 
-**Terraform**: 60 pre-built templates in `templates/` (AWS, Azure, GCP). Template sync parses `.tf` files. Templates support admin-editable tags that persist across syncs. Templates can be assigned to groups for access control.
+**Terraform**: 61 pre-built templates in `templates/` (AWS, Azure, GCP). Template sync parses `.tf` files. Templates support admin-editable tags that persist across syncs. Templates can be assigned to groups for access control.
 
 **Deployments**: Two execution methods:
 - *Local*: temp dir → copy files → write tfvars → set env creds → init → plan → apply. Single-threaded queue. Live stdout/stderr via SSE. Logs stored in `planOutput`/`applyOutput`/`destroyOutput`.
@@ -76,6 +76,8 @@ Path alias: `@/*` maps to `client/src/*`.
 - Key files: `server/src/modules/deployments/deployments.service.ts` (business logic, SSE emitter), `github-executor.ts` (GitHub Actions dispatch/polling/log fetching), `local-executor.ts` (Terraform CLI execution).
 
 **GitHub Integration**: Centralized GitHub App authentication via `@octokit/auth-app` (replaces per-user PATs). App config (App ID, Installation ID, encrypted private key) stored in SystemSettings. `server/src/modules/github/github-app.ts` provides `getAppOctokit()` factory with 55-min caching. Portal Admin configures the App in Portal Administration page. Workflow dispatch for deployments and service scaffolding. Polling every 30s for workflow run status. Workflow YAML is auto-validated and fixed before dispatch (adds `workflow_dispatch` trigger, sets `terraform_wrapper: false`, injects credential env vars, adds destroy step, fixes working directory). Service scaffolding pushes template repos via GitHub API. Repos created in the App's installation org via `repos.createInOrg()`.
+
+**Help**: Built-in searchable help section. Markdown articles with YAML frontmatter (title, category, tags, order) stored in `help/` at the repo root. Server reads articles from disk at startup via `server/src/modules/help/help.service.ts` using `gray-matter` for frontmatter parsing. Cached in memory after first request. Single endpoint: `GET /api/help/articles` (requires authentication, no special permission). Client renders markdown with `react-markdown` + `remark-gfm` + `@tailwindcss/typography`. `HelpPage.tsx` provides category filtering, full-text search, inline expand/collapse, and a full article view. Sidebar entry uses `HelpCircle` icon with no permission gate. Help articles are also included in the Docker image (`COPY help/ help/` in Dockerfile).
 
 **Encryption**: AES-256-GCM for cloud credentials, federation config, and GitHub App private key. Format: `base64(iv):base64(tag):base64(ciphertext)`. Key from `ENCRYPTION_KEY` env var (64 hex chars).
 
@@ -91,6 +93,10 @@ Server uses custom error classes extending `AppError` in `server/src/utils/error
 
 `client/src/pages/deployments/DeploymentDetailPage.tsx` — Shows deployment status, error card, logs, outputs, and variables. Error card extracts a summary line from error messages (Terraform errors, auth errors) and shows it prominently with a collapsible full-details section. Log section headers are contextual: "SETUP"/"WORKFLOW RUN" for GitHub deployments, "PLAN"/"APPLY" for local. SSE is only connected for local deployments (GitHub deployments get logs via polling on completion).
 
+### Help Page
+
+`client/src/pages/help/HelpPage.tsx` — Two views: article list and full article. List view groups articles by category with search and category filter pills. Each article row has a chevron to expand inline and a title click to open the full article view. Full article view has a header banner with category/tag badges and renders markdown with custom `react-markdown` components for styled tables, code blocks, tip callouts (blockquotes), and headings. Uses `@tailwindcss/typography` for prose styling. Dark mode supported throughout.
+
 ### Portal Admin Page
 
 `client/src/pages/admin/PortalAdminPage.tsx` — Four cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub App — configure/test/remove GitHub App (App ID, Installation ID, private key); (3) GitHub Actions Defaults — default repo, workflow, branch; (4) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
@@ -98,3 +104,7 @@ Server uses custom error classes extending `AppError` in `server/src/utils/error
 ## Environment Setup
 
 Copy `.env.example` to `server/.env`. Required vars: `JWT_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars). Optional: `SERVER_URL` (for federation callback URLs, defaults to `http://localhost:3001`), `CLIENT_URL` (defaults to `http://localhost:5173`), GitHub OAuth, custom Terraform binary path. SSO providers (Azure AD, Google, Okta) are configured via the Portal Admin UI (Federation Providers), not env vars.
+
+## Docker
+
+Multi-stage Dockerfile: build stage compiles all workspaces, production stage copies built artifacts + Prisma schema + templates + help articles. Includes Terraform CLI. `docker-compose.yml` mounts a named volume for SQLite persistence. Setup script (`setup.sh`) supports both Docker and native modes, auto-generates secrets, runs migrations, and seeds the database.
