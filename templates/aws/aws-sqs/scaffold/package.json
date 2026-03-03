@@ -1,0 +1,14 @@
+{
+  "name": "{{service_name}}",
+  "version": "1.0.0",
+  "description": "{{service_name}} SQS consumer",
+  "scripts": {
+    "build": "tsc",
+    "package": "npm run build && cd dist && zip -r ../function.zip ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.131",
+    "typescript": "^5.3.3"
+  }
+}

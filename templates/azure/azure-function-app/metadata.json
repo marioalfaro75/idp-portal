@@ -4,5 +4,6 @@
   "provider": "azure",
   "category": "serverless",
   "version": "1.0.0",
-  "tags": ["azure", "serverless", "function-app", "functions", "faas"]
+  "tags": ["azure", "serverless", "function-app", "functions", "faas", "scaffold"],
+  "workflow": "deploy.yml"
 }

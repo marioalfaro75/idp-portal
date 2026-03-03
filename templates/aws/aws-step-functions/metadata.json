@@ -4,5 +4,6 @@
   "provider": "aws",
   "category": "serverless",
   "version": "1.0.0",
-  "tags": ["aws", "serverless", "step-functions", "workflow", "orchestration"]
+  "tags": ["aws", "serverless", "step-functions", "workflow", "orchestration", "scaffold"],
+  "workflow": "deploy.yml"
 }

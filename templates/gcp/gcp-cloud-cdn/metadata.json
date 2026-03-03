@@ -4,5 +4,6 @@
   "provider": "gcp",
   "category": "storage",
   "version": "1.0.0",
-  "tags": ["gcp", "storage", "cdn", "caching", "static-content", "global"]
+  "workflow": "deploy.yml",
+  "tags": ["gcp", "storage", "cdn", "caching", "static-content", "global", "scaffold"]
 }

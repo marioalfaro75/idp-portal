@@ -4,5 +4,6 @@
   "provider": "azure",
   "category": "compute",
   "version": "1.0.0",
-  "tags": ["azure", "compute", "aks", "kubernetes", "containers", "orchestration"]
+  "tags": ["azure", "compute", "aks", "kubernetes", "containers", "orchestration", "scaffold"],
+  "workflow": "deploy.yml"
 }

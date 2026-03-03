@@ -4,5 +4,6 @@
   "provider": "aws",
   "category": "storage",
   "version": "1.0.0",
-  "tags": ["aws", "storage", "cloudfront", "s3", "static-site", "cdn"]
+  "workflow": "deploy.yml",
+  "tags": ["aws", "storage", "cloudfront", "s3", "static-site", "cdn", "scaffold"]
 }

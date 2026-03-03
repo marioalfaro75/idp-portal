@@ -4,5 +4,6 @@
   "provider": "aws",
   "category": "databases",
   "version": "1.0.0",
-  "tags": ["aws", "databases", "rds", "postgresql", "relational"]
+  "workflow": "deploy.yml",
+  "tags": ["aws", "databases", "rds", "postgresql", "relational", "scaffold"]
 }

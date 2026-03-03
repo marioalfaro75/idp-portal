@@ -4,5 +4,6 @@
   "provider": "gcp",
   "category": "containers",
   "version": "1.0.0",
-  "tags": ["gcp", "containers", "cloud-run", "serverless", "docker"]
+  "tags": ["gcp", "containers", "cloud-run", "serverless", "docker", "scaffold"],
+  "workflow": "deploy.yml"
 }

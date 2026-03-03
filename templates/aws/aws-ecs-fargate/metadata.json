@@ -4,5 +4,6 @@
   "provider": "aws",
   "category": "containers",
   "version": "1.0.0",
-  "tags": ["aws", "containers", "ecs", "fargate", "docker"]
+  "tags": ["aws", "containers", "ecs", "fargate", "docker", "scaffold"],
+  "workflow": "deploy.yml"
 }

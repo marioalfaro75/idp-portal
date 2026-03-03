@@ -4,5 +4,6 @@
   "provider": "aws",
   "category": "messaging",
   "version": "1.0.0",
-  "tags": ["aws", "messaging", "sqs", "queue"]
+  "tags": ["aws", "messaging", "sqs", "queue", "scaffold"],
+  "workflow": "deploy.yml"
 }

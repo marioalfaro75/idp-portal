@@ -4,5 +4,6 @@
   "provider": "gcp",
   "category": "messaging",
   "version": "1.0.0",
-  "tags": ["gcp", "messaging", "pubsub", "events"]
+  "tags": ["gcp", "messaging", "pubsub", "events", "scaffold"],
+  "workflow": "deploy.yml"
 }

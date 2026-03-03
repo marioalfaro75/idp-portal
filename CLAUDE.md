@@ -62,6 +62,8 @@ Path alias: `@/*` maps to `client/src/*`.
 
 **RBAC**: 20 permissions, 4 system roles (Portal Admin, Admin, Editor, Viewer), custom roles supported. Server enforces via `authorize()` middleware; client uses `<RoleGuard>`.
 
+**Templates & Scaffolding**: Template Catalog (`TemplateCatalogPage.tsx`) supports filtering by provider, category, search, and a "Scaffoldable" toggle. Templates with `hasScaffold === true` show a scaffold badge and direct `/templates/{slug}/scaffold` quick-link on cards. 17 templates currently support scaffolding.
+
 **Deployments**: Local (Terraform CLI with SSE streaming) or GitHub Actions (workflow dispatch + polling). Output stored in `planOutput`/`applyOutput`/`destroyOutput` fields. Deployment outputs are redacted for sensitive values before DB storage.
 
 **GitHub Integration**: Centralized GitHub App auth via `@octokit/auth-app`. Config in SystemSettings (encrypted). `github-app.ts` provides `getAppOctokit()` with 55-min caching and `testPrivateKey()` for key validation.

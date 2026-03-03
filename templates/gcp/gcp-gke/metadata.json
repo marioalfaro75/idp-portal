@@ -4,5 +4,6 @@
   "provider": "gcp",
   "category": "compute",
   "version": "1.0.0",
-  "tags": ["gcp", "compute", "gke", "kubernetes", "containers", "autoscaling"]
+  "tags": ["gcp", "compute", "gke", "kubernetes", "containers", "autoscaling", "scaffold"],
+  "workflow": "deploy.yml"
 }

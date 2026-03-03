@@ -4,5 +4,6 @@
   "provider": "aws",
   "category": "compute",
   "version": "1.0.0",
-  "tags": ["aws", "compute", "eks", "kubernetes", "containers"]
+  "tags": ["aws", "compute", "eks", "kubernetes", "containers", "scaffold"],
+  "workflow": "deploy.yml"
 }

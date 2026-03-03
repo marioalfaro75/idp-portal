@@ -8,11 +8,11 @@ Without a portal, each engineer must install Terraform locally, manage credentia
 
 ## Features
 
-- **Template Catalog** — Browse and search 61 pre-built Terraform templates across AWS, Azure, and GCP
+- **Template Catalog** — Browse and search 61 pre-built Terraform templates across AWS, Azure, and GCP with filters for provider, category, and scaffoldable templates
 - **Guided Deployments** — Select a template, fill in variables via a dynamic form, choose a cloud connection, and deploy
 - **Dual Execution** — Deploy via local Terraform CLI with live SSE log streaming, or via GitHub Actions for auditable CI/CD workflows
 - **Pre-Deploy Security Scanning** — Automated IaC scanning with Trivy, TFLint, and Conftest before deployment; configurable enforcement (blocking or advisory)
-- **Service Scaffolding** — Create new repositories from templates via GitHub and track their lifecycle
+- **Service Scaffolding** — 17 templates support service scaffolding with quick-access from the catalog; create new repositories from templates via GitHub and track their lifecycle
 - **Cloud Credential Management** — Centrally store and manage cloud provider credentials encrypted with AES-256-GCM
 - **GitHub App Integration** — Centralized GitHub App for workflow dispatch, log fetching, and repo creation (no personal access tokens)
 - **Role-Based Access Control** — 20 granular permissions with 4 system roles (Portal Admin, Admin, Editor, Viewer) and custom roles

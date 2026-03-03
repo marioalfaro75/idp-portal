@@ -4,5 +4,6 @@
   "provider": "azure",
   "category": "storage",
   "version": "1.0.0",
-  "tags": ["azure", "storage", "cdn", "content-delivery", "caching"]
+  "workflow": "deploy.yml",
+  "tags": ["azure", "storage", "cdn", "content-delivery", "caching", "scaffold"]
 }

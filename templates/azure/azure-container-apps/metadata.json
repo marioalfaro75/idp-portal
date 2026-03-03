@@ -4,5 +4,6 @@
   "provider": "azure",
   "category": "containers",
   "version": "1.0.0",
-  "tags": ["azure", "containers", "container-apps", "serverless"]
+  "tags": ["azure", "containers", "container-apps", "serverless", "scaffold"],
+  "workflow": "deploy.yml"
 }

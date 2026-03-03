@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "GCP project ID"
+        required: false
+        default: "{{project_id}}"
+      region:
+        description: "GCP region"
+        required: false
+        default: "{{region}}"
+      cluster_name:
+        description: "GKE cluster name"
+        required: false
+        default: "{{cluster_name}}"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ inputs.region }}-docker.pkg.dev
+
+      - name: Build and push to Artifact Registry
+        run: |
+          docker build -t ${{ inputs.region }}-docker.pkg.dev/${{ inputs.project_id }}/{{service_name}}/{{service_name}}:${{ github.sha }} .
+          docker push ${{ inputs.region }}-docker.pkg.dev/${{ inputs.project_id }}/{{service_name}}/{{service_name}}:${{ github.sha }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ inputs.cluster_name }}
+          location: ${{ inputs.region }}
+          project_id: ${{ inputs.project_id }}
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install {{service_name}} ./helm \
+            --set image.repository=${{ inputs.region }}-docker.pkg.dev/${{ inputs.project_id }}/{{service_name}}/{{service_name}} \
+            --set image.tag=${{ github.sha }} \
+            --namespace default

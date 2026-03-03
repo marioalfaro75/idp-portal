@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "GCP project ID"
+        required: false
+        default: "{{project_id}}"
+      region:
+        description: "GCP region"
+        required: false
+        default: "{{region}}"
+      function_name:
+        description: "Cloud Function name"
+        required: false
+        default: "{{function_name}}"
+      runtime:
+        description: "Cloud Function runtime"
+        required: false
+        default: "{{runtime}}"
+      entry_point:
+        description: "Function entry point"
+        required: false
+        default: "{{entry_point}}"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Cloud Function
+        run: |
+          gcloud functions deploy ${{ inputs.function_name }} \
+            --gen2 \
+            --runtime ${{ inputs.runtime }} \
+            --region ${{ inputs.region }} \
+            --source . \
+            --entry-point ${{ inputs.entry_point }} \
+            --trigger-http \
+            --allow-unauthenticated
