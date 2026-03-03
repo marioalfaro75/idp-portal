@@ -9,24 +9,18 @@ Internal Developer Portal (IDP) — a full-stack TypeScript monorepo for self-se
 ## Commands
 
 ```bash
-# Development (runs client + server concurrently)
-npm run dev
-
-# Build all packages (shared → server → client)
-npm run build
-
-# Database
-npm run db:setup          # Initialize + seed (first time)
-npm run db:migrate        # Run Prisma migrations (cd server && npx prisma migrate dev)
-npm run db:seed           # Seed system roles (cd server && npx prisma db seed)
-npx prisma studio         # Visual DB browser (run from server/)
-
-# Type checking
-npm run typecheck -w client   # Client only
-npm run typecheck -w server   # Server only
+npm run dev                       # Development (client + server concurrently)
+npm run build                     # Build all (shared → server → client)
+npm run typecheck -w client       # Client type check
+npm run typecheck -w server       # Server type check
+npm run db:setup                  # Initialize + seed (first time)
+npm run db:migrate                # Run Prisma migrations
+npm run db:seed                   # Seed system roles
+npm run audit                     # npm audit --audit-level=high
+npx prisma studio                 # Visual DB browser (run from server/)
 ```
 
-No test framework is configured yet. Agent guide (`agent.md`) recommends Vitest + React Testing Library for client, Vitest + supertest for server.
+No test framework is configured yet.
 
 ## Architecture
 
@@ -42,71 +36,54 @@ Client dev server proxies `/api` → `http://localhost:3001`.
 
 ### Server Module Pattern
 
-Each feature follows this structure in `server/src/modules/{feature}/`:
-- `{feature}.routes.ts` — Express router with middleware chain: `authenticate → authorize(permission) → validate(schema) → handler`
+Each feature in `server/src/modules/{feature}/`:
+- `{feature}.routes.ts` — Express router: `authenticate → authorize(permission) → validate(schema) → handler`
 - `{feature}.service.ts` — Business logic
 - `{feature}.validators.ts` — Zod schemas (or re-exports from shared)
 
-Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups, help, security.
+Modules: auth, users, roles, cloud-connections, templates, deployments, github, audit, services, settings, federation, groups, help, security, updates.
 
 ### Client Structure
 
-- `client/src/api/` — Axios-based API modules (one per feature). Axios interceptor auto-attaches JWT and redirects on 401.
-- `client/src/pages/` — Route-level page components organized by feature
-- `client/src/components/ui/` — Reusable primitives (Button, Input, Select, Card, Badge, Modal, Table). Table component supports resizable columns, sticky headers, custom scrollbars, and responsive mobile card layout.
-- `client/src/components/guards/` — AuthGuard, RoleGuard for access control
+- `client/src/api/` — Axios-based API modules. Interceptor auto-attaches JWT, redirects on 401.
+- `client/src/pages/` — Route-level page components by feature
+- `client/src/components/ui/` — Reusable primitives (Button, Input, Select, Card, Badge, Modal, Table)
+- `client/src/components/guards/` — AuthGuard, RoleGuard
 - `client/src/stores/` — Zustand stores (auth-store, ui-store)
-- `client/src/hooks/` — Custom hooks wrapping React Query for data fetching
+- `client/src/hooks/` — React Query hooks for data fetching
 
 Path alias: `@/*` maps to `client/src/*`.
 
 ### Key Subsystems
 
-**Auth**: Email/password (bcrypt 12 rounds) + multi-provider SSO federation (Azure AD, Google Workspace, Okta) via OIDC and SAML. JWT with session-based revocation via `Session` table tracking JTI. Initial setup creates first admin at `/api/auth/setup`. `auth.service.ts` exports `generateToken()` and `issueSessionToken()` for reuse by other modules.
+**Auth**: Email/password (bcrypt 12 rounds) + multi-provider SSO via OIDC/SAML. JWT with session-based revocation via `Session` table (JTI tracking). `auth.service.ts` exports `generateToken()` and `issueSessionToken()` for reuse by other modules.
 
-**Federation**: Multi-provider identity federation in `server/src/modules/federation/`. `FederationProvider` Prisma model stores per-provider encrypted config (AES-256-GCM). Dynamic routes at `/api/federation/:slug/login` and `/api/federation/:slug/callback`. Uses `openid-client` for OIDC and `@node-saml/node-saml` for SAML 2.0. OIDC state CSRF protection via `federation_state` httpOnly cookie (requires `cookie-parser` middleware). All callbacks redirect to `{CLIENT_URL}/auth/callback?token=...&user=...` (same format as `OAuthCallbackPage.tsx` expects). Admin CRUD at `/api/federation/admin/providers` (PORTAL_ADMIN permission). Legacy `oidc.*` SystemSettings auto-migrate to FederationProvider on startup.
+**Federation**: Multi-provider identity federation (`server/src/modules/federation/`). `FederationProvider` Prisma model with encrypted config (AES-256-GCM). Dynamic routes at `/api/federation/:slug/login` and `/:slug/callback`. OIDC via `openid-client`, SAML via `@node-saml/node-saml`. State CSRF via `federation_state` httpOnly cookie. Admin CRUD at `/api/federation/admin/providers`. Export/import endpoints for config backup.
 
-**RBAC**: 20 permissions, 4 system roles (Portal Admin, Admin, Editor, Viewer), custom roles supported. Server enforces via `authorize()` middleware; client uses `<RoleGuard>` for UI only.
+**RBAC**: 20 permissions, 4 system roles (Portal Admin, Admin, Editor, Viewer), custom roles supported. Server enforces via `authorize()` middleware; client uses `<RoleGuard>`.
 
-**Terraform**: 61 pre-built templates in `templates/` (AWS, Azure, GCP). Template sync parses `.tf` files. Templates support admin-editable tags that persist across syncs. Templates can be assigned to groups for access control.
+**Deployments**: Local (Terraform CLI with SSE streaming) or GitHub Actions (workflow dispatch + polling). Output stored in `planOutput`/`applyOutput`/`destroyOutput` fields. Deployment outputs are redacted for sensitive values before DB storage.
 
-**Deployments**: Two execution methods:
-- *Local*: temp dir → copy files → write tfvars → set env creds → init → plan → apply. Single-threaded queue. Live stdout/stderr via SSE. Logs stored in `planOutput`/`applyOutput`/`destroyOutput`.
-- *GitHub Actions*: push template files → set repo secrets → validate/fix workflow YAML → dispatch `workflow_dispatch` event → poll for run ID → poll for completion. On completion (success or failure), per-job logs are fetched via Octokit and stored in the same output fields. Error summaries are extracted from logs (Terraform `Error:` lines, cloud auth errors). Dispatched deployments with no run ID after 10 minutes are auto-failed. Pre-dispatch setup logs (credential pushes, workflow validation) are persisted in `planOutput`.
-- Key files: `server/src/modules/deployments/deployments.service.ts` (business logic, SSE emitter), `github-executor.ts` (GitHub Actions dispatch/polling/log fetching), `local-executor.ts` (Terraform CLI execution).
+**GitHub Integration**: Centralized GitHub App auth via `@octokit/auth-app`. Config in SystemSettings (encrypted). `github-app.ts` provides `getAppOctokit()` with 55-min caching and `testPrivateKey()` for key validation.
 
-**GitHub Integration**: Centralized GitHub App authentication via `@octokit/auth-app` (replaces per-user PATs). App config (App ID, Installation ID, encrypted private key) stored in SystemSettings. `server/src/modules/github/github-app.ts` provides `getAppOctokit()` factory with 55-min caching. Portal Admin configures the App in Portal Administration page. Workflow dispatch for deployments and service scaffolding. Polling every 30s for workflow run status. Workflow YAML is auto-validated and fixed before dispatch (adds `workflow_dispatch` trigger, sets `terraform_wrapper: false`, injects credential env vars, adds destroy step, fixes working directory). Service scaffolding pushes template repos via GitHub API. Repos created in the App's installation org via `repos.createInOrg()`.
+**Security Scanning**: Pre-deploy gate using Trivy, TFLint, Conftest. Config in SystemSettings. Scans evaluate actual deployment variables. Results shown in modal before deploy.
 
-**Help**: Built-in searchable help section. Markdown articles with YAML frontmatter (title, category, tags, order) stored in `help/` at the repo root. Server reads articles from disk at startup via `server/src/modules/help/help.service.ts` using `gray-matter` for frontmatter parsing. Cached in memory after first request. Single endpoint: `GET /api/help/articles` (requires authentication, no special permission). Client renders markdown with `react-markdown` + `remark-gfm` + `@tailwindcss/typography`. `HelpPage.tsx` provides category filtering, full-text search, inline expand/collapse, and a full article view. Sidebar entry uses `HelpCircle` icon with no permission gate. Help articles are also included in the Docker image (`COPY help/ help/` in Dockerfile).
+**Security Hardening**: `helmet` middleware (CSP, HSTS, frameguard), log redaction (AWS keys, JWTs, sensitive meta), deployment output sanitization, audit log retention policy, RBAC permission audit trail, `npm audit` CI workflow.
 
-**Security Scanning**: Pre-deploy scanning gate using Trivy (IaC misconfigurations), TFLint (provider-specific linting), and Conftest (custom OPA/Rego policies). Module at `server/src/modules/security/`. Scans run when user clicks Deploy — results shown in `SecurityScanModal` before Terraform execution. Config stored in SystemSettings: `security.enabled`, `security.enforcement` (blocking/advisory), `security.severityThreshold`, `security.opaPolicy`. Tools auto-detected at startup; Portal Admin can install them from GitHub releases via the UI (`POST /api/security/tools/{tool}/install` downloads to `server/bin/`). Scans create a temp copy of template files with user's variable values as `terraform.tfvars.json` so tools evaluate actual deployment config. Trivy requires explicit `--tf-vars` flag. Missing tools are gracefully skipped (`available: false`). Scan results stored on Deployment record (`scanOutput` field) for audit. Types in `shared/src/types/security.ts`, validators in `shared/src/validators/security.ts`.
-
-**Encryption**: AES-256-GCM for cloud credentials, federation config, and GitHub App private key. Format: `base64(iv):base64(tag):base64(ciphertext)`. Key from `ENCRYPTION_KEY` env var (64 hex chars).
+**Encryption**: AES-256-GCM for cloud credentials, federation config, GitHub App private key, Terraform state. Format: `base64(iv):base64(tag):base64(ciphertext)`. Key from `ENCRYPTION_KEY` env var (64 hex chars).
 
 ### Database
 
-SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider. Deployment output fields (`planOutput`, `applyOutput`, `destroyOutput`, `errorMessage`, `scanOutput`) are nullable text — no migration needed to store additional data in them.
+SQLite via Prisma. Schema at `server/prisma/schema.prisma`. All PKs are UUIDs. JSON fields stored as strings. Key models: User, Role, Session, CloudConnection, Template, Deployment, Service, WorkflowRun, AuditLog, SystemSetting, Group, FederationProvider.
 
 ### Error Handling
 
-Server uses custom error classes extending `AppError` in `server/src/utils/errors.ts` (NotFoundError, UnauthorizedError, ForbiddenError, ConflictError, ValidationError). All route handlers wrapped with `asyncHandler`. Global error handler returns structured JSON.
-
-### Deployment Detail Page
-
-`client/src/pages/deployments/DeploymentDetailPage.tsx` — Shows deployment status, error card, logs, outputs, and variables. Error card extracts a summary line from error messages (Terraform errors, auth errors) and shows it prominently with a collapsible full-details section. Log section headers are contextual: "SETUP"/"WORKFLOW RUN" for GitHub deployments, "PLAN"/"APPLY" for local. SSE is only connected for local deployments (GitHub deployments get logs via polling on completion).
-
-### Help Page
-
-`client/src/pages/help/HelpPage.tsx` — Two views: article list and full article. List view groups articles by category with search and category filter pills. Each article row has a chevron to expand inline and a title click to open the full article view. Full article view has a header banner with category/tag badges and renders markdown with custom `react-markdown` components for styled tables, code blocks, tip callouts (blockquotes), and headings. Uses `@tailwindcss/typography` for prose styling. Dark mode supported throughout.
-
-### Portal Admin Page
-
-`client/src/pages/admin/PortalAdminPage.tsx` — Five cards: (1) Federation Providers — full CRUD with add/edit modal, enable/disable toggle, protocol-specific config fields, auto-computed callback/metadata URLs; (2) GitHub App — configure/test/remove GitHub App (App ID, Installation ID, private key); (3) GitHub Actions Defaults — default repo, workflow, branch; (4) Security Scanning — enable/disable toggle, enforcement mode (blocking/advisory), severity threshold dropdown, tool status indicators with Install buttons, OPA policy textarea; (5) System Info — remaining SystemSettings. Protected by `PORTAL_ADMIN` permission via `<RoleGuard>`.
+Custom error classes extending `AppError` in `server/src/utils/errors.ts` (NotFoundError, UnauthorizedError, ForbiddenError, ConflictError, ValidationError). All route handlers wrapped with `asyncHandler`. Global error handler returns structured JSON.
 
 ## Environment Setup
 
-Copy `.env.example` to `server/.env`. Required vars: `JWT_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars). Optional: `SERVER_URL` (for federation callback URLs, defaults to `http://localhost:3001`), `CLIENT_URL` (defaults to `http://localhost:5173`), GitHub OAuth, custom Terraform binary path. SSO providers (Azure AD, Google, Okta) are configured via the Portal Admin UI (Federation Providers), not env vars.
+Copy `.env.example` to `server/.env`. Required vars: `JWT_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars). Optional: `SERVER_URL`, `CLIENT_URL`, custom Terraform binary path. SSO providers configured via Portal Admin UI, not env vars.
 
 ## Docker
 
-Multi-stage Dockerfile: build stage compiles all workspaces, production stage copies built artifacts + Prisma schema + templates + help articles. Includes Terraform CLI, Trivy, TFLint, and Conftest for security scanning. `docker-compose.yml` mounts a named volume for SQLite persistence. Setup script (`setup.sh`) supports both Docker and native modes, auto-generates secrets, runs migrations, and seeds the database.
+Multi-stage Dockerfile: build stage compiles all workspaces, production stage copies built artifacts + Prisma schema + templates + help articles. Includes Terraform CLI, Trivy, TFLint, Conftest. `docker-compose.yml` mounts a named volume for SQLite persistence. `setup.sh` supports Docker and native modes.

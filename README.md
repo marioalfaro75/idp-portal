@@ -11,15 +11,18 @@ Without a portal, each engineer must install Terraform locally, manage credentia
 - **Template Catalog** — Browse and search 61 pre-built Terraform templates across AWS, Azure, and GCP
 - **Guided Deployments** — Select a template, fill in variables via a dynamic form, choose a cloud connection, and deploy
 - **Dual Execution** — Deploy via local Terraform CLI with live SSE log streaming, or via GitHub Actions for auditable CI/CD workflows
+- **Pre-Deploy Security Scanning** — Automated IaC scanning with Trivy, TFLint, and Conftest before deployment; configurable enforcement (blocking or advisory)
 - **Service Scaffolding** — Create new repositories from templates via GitHub and track their lifecycle
 - **Cloud Credential Management** — Centrally store and manage cloud provider credentials encrypted with AES-256-GCM
 - **GitHub App Integration** — Centralized GitHub App for workflow dispatch, log fetching, and repo creation (no personal access tokens)
 - **Role-Based Access Control** — 20 granular permissions with 4 system roles (Portal Admin, Admin, Editor, Viewer) and custom roles
 - **Group-Based Access Control** — Assign templates to groups; members only see their group's templates
 - **Multi-Provider SSO** — Federated authentication with Azure AD, Google Workspace, and Okta via OIDC or SAML 2.0
+- **Federation Config Backup** — Export and import federation provider configurations for disaster recovery
 - **Built-in Help** — Searchable help section with markdown articles covering setup and usage
 - **Deployment Cleanup** — Admin-only bulk removal of stale deployments (failed, destroyed, pending, planned)
-- **Audit Logging** — Every action recorded with user, IP address, and timestamp
+- **Audit Logging** — Every action recorded with user, IP address, and timestamp; configurable retention policy with automatic cleanup
+- **Update Checker** — Portal Admins can check for available updates from the Settings page
 - **Dark/Light Mode** — Toggle between dark, light, and system-preferred themes
 
 ## Tech Stack
@@ -28,12 +31,13 @@ Without a portal, each engineer must install Terraform locally, manage credentia
 |-------|-----------|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | State Management | Zustand (auth/UI), React Query (server state) |
-| Backend | Express 4, TypeScript |
+| Backend | Express 4, TypeScript, Helmet (security headers) |
 | Database | SQLite via Prisma ORM |
 | Auth | JWT with session-based revocation; multi-provider SSO (OIDC + SAML) |
 | SSO Libraries | `openid-client` (OIDC), `@node-saml/node-saml` (SAML 2.0) |
-| Encryption | AES-256-GCM for credentials, federation config, and GitHub App keys |
+| Encryption | AES-256-GCM for credentials, federation config, Terraform state, and GitHub App keys |
 | IaC Engine | Terraform CLI (local) or GitHub Actions (remote) |
+| Security Scanning | Trivy (IaC misconfigs), TFLint (provider linting), Conftest (OPA/Rego policies) |
 | GitHub | `@octokit/rest` + `@octokit/auth-app` (GitHub App authentication) |
 | Containerization | Docker with multi-stage build |
 
@@ -49,6 +53,7 @@ idp-portal/
 │   ├── azure/       20 templates (AKS, Blob Storage, App Service, etc.)
 │   └── gcp/         20 templates (GKE, Cloud Storage, Cloud Run, etc.)
 ├── help/            Markdown help articles with YAML frontmatter
+├── .github/         CI workflows (security audit)
 ├── Dockerfile       Multi-stage production build
 ├── docker-compose.yml
 └── setup.sh         Interactive setup script
@@ -175,6 +180,9 @@ npm run db:setup              # Initialize + seed (first time)
 npm run db:migrate            # Run Prisma migrations
 npm run db:seed               # Seed system roles
 
+# Security
+npm run audit                 # Run npm audit (--audit-level=high)
+
 # Docker
 docker compose up -d          # Start in background
 docker compose down           # Stop
@@ -186,12 +194,33 @@ docker compose build          # Rebuild image
 
 | Role | Access |
 |------|--------|
-| **Portal Admin** | Full access — manage users, roles, credentials, templates, deployments, services, settings, federation providers, GitHub App |
+| **Portal Admin** | Full access — manage users, roles, credentials, templates, deployments, services, settings, federation providers, GitHub App, security scanning config |
 | **Admin** | Full access except portal-level settings (federation, GitHub App, system config) |
 | **Editor** | Manage cloud connections, deploy templates, scaffold services, dispatch GitHub workflows |
 | **Viewer** | Browse template catalog, view deployments and services (read-only) |
 
 Admins can create custom roles with any subset of the 20 available permissions.
+
+## Security Scanning
+
+The portal includes a pre-deploy security scanning gate that analyzes Terraform templates before execution:
+
+| Tool | Purpose |
+|------|---------|
+| **Trivy** | IaC misconfiguration detection (AWS, Azure, GCP, Kubernetes) |
+| **TFLint** | Provider-specific Terraform linting |
+| **Conftest** | Custom OPA/Rego policy enforcement |
+
+Scans evaluate the user's actual variable values (not just template defaults) by generating a temporary `terraform.tfvars.json`. Results are shown in a modal before deployment proceeds.
+
+Configure in **Portal Admin > Security Scanning**:
+- **Enable/disable** scanning globally
+- **Enforcement mode** — `blocking` (prevents deployment on failure) or `advisory` (warns but allows deployment)
+- **Severity threshold** — minimum severity to flag (CRITICAL, HIGH, MEDIUM, LOW)
+- **OPA policies** — custom Rego rules for Conftest
+- **Tool installation** — install Trivy, TFLint, and Conftest from GitHub releases via the UI
+
+Missing tools are gracefully skipped. Scan results are stored on each deployment record for audit.
 
 ## Federation (SSO)
 
@@ -212,6 +241,8 @@ Each provider is configured in **Portal Admin > Federation Providers** with:
 
 SAML providers also expose SP metadata at `/api/federation/{slug}/metadata`.
 
+Portal Admins can **export** all federation provider configurations (decrypted) for backup and **import** them on another instance, enabling disaster recovery when the encryption key changes.
+
 ## GitHub App Integration
 
 The portal uses a centralized GitHub App (instead of personal access tokens) for:
@@ -220,7 +251,7 @@ The portal uses a centralized GitHub App (instead of personal access tokens) for
 - **Service scaffolding** — create repos in the org, push scaffold files, trigger setup workflows
 - **Workflow auto-fixing** — automatically adds `workflow_dispatch` inputs, env vars, state persistence, and Terraform best practices to workflow YAML
 
-Configure the GitHub App in **Portal Admin > GitHub App** with the App ID, Installation ID, and private key. See the built-in help articles for detailed setup instructions.
+Configure the GitHub App in **Portal Admin > GitHub App** with the App ID, Installation ID, and private key. A **test key** endpoint lets admins validate a new private key before saving it, enabling key rotation without downtime. See the built-in help articles for detailed setup instructions.
 
 ## Built-in Help
 
@@ -242,7 +273,7 @@ All API routes are prefixed with `/api` and require JWT authentication (except a
 | Prefix | Purpose |
 |--------|---------|
 | `/api/auth` | Login, setup, token refresh |
-| `/api/federation` | SSO login/callback, admin CRUD for providers |
+| `/api/federation` | SSO login/callback, admin CRUD, export/import |
 | `/api/users` | User management |
 | `/api/roles` | Role management |
 | `/api/groups` | Group management |
@@ -250,18 +281,42 @@ All API routes are prefixed with `/api` and require JWT authentication (except a
 | `/api/templates` | Template catalog, sync, tags |
 | `/api/deployments` | Create, list, detail, destroy, SSE logs |
 | `/api/services` | Service scaffolding and catalog |
-| `/api/github` | GitHub App config, repo listing, workflow dispatch |
+| `/api/github` | GitHub App config, key testing, repo listing, workflow dispatch |
+| `/api/security` | Security scan config, tool installation, scan execution |
 | `/api/audit-logs` | Audit log queries |
 | `/api/settings` | System settings |
+| `/api/updates` | Check for available updates (Portal Admin) |
 | `/api/help` | Help articles |
 | `/api/health` | Health check (no auth required) |
 
 ## Security
 
-- **Encryption at rest** — Cloud credentials, federation provider secrets, and the GitHub App private key are encrypted with AES-256-GCM before storage
+### Encryption and Authentication
+- **Encryption at rest** — Cloud credentials, federation provider secrets, Terraform state, and the GitHub App private key are encrypted with AES-256-GCM before storage
 - **JWT + session revocation** — Tokens include a JTI tracked in a `Session` table; logging out or revoking access invalidates the session server-side
 - **CSRF protection** — OIDC federation uses a state parameter stored in an httpOnly cookie
 - **SAML signature verification** — SAML assertions are verified against the IdP's public certificate
 - **Password hashing** — bcrypt with 12 rounds
-- **Rate limiting** — All `/api` routes are rate-limited
+
+### HTTP Security
+- **Security headers** — Helmet middleware provides CSP, HSTS, X-Frame-Options (deny), X-Content-Type-Options, and other standard headers
+- **Rate limiting** — All `/api` routes are rate-limited (100 req/15min); auth endpoints have stricter limits (20 req/15min)
+- **Input validation** — All inputs validated with Zod schemas; deployment names, service names, and variables have size and character constraints
+- **Template path traversal protection** — Terraform runner validates template paths cannot escape the templates directory
+
+### Data Protection
+- **Log redaction** — Application logs automatically redact AWS access keys, JWT tokens, and values in sensitive fields (password, secret, token, credential, etc.)
+- **Output sanitization** — Terraform plan/apply/destroy output is redacted for AWS keys, secrets, passwords, and tokens before database storage
 - **No credential exposure** — Cloud credentials are never returned in API responses after creation
+- **Credential age tracking** — Cloud connections show age since last update with rotation warnings after 90 days
+
+### Audit and Compliance
+- **Comprehensive audit logging** — Every action recorded with user, IP address, and timestamp
+- **RBAC permission audit trail** — Role updates log before/after permission changes; role deletions log the removed permissions
+- **Failed login tracking** — Failed login and SSO attempts are logged with IP and email for security monitoring
+- **Configurable retention** — Audit logs support a retention policy (`audit.retentionDays` setting) with automatic daily cleanup
+- **Session cleanup** — Expired sessions are automatically purged hourly
+
+### CI/CD Security
+- **Dependency auditing** — GitHub Actions workflow runs `npm audit --audit-level=high` on every push to main and weekly on Mondays
+- **Pre-deploy scanning** — Trivy, TFLint, and Conftest scan templates before deployment with configurable enforcement
