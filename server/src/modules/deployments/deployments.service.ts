@@ -5,10 +5,27 @@ import * as terraformRunner from './terraform-runner';
 import * as githubExecutor from './github-executor';
 import * as cloudConnectionService from '../cloud-connections/cloud-connections.service';
 import * as groupsService from '../groups/groups.service';
+import * as securityService from '../security/security.service';
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
+import { encrypt, decrypt } from '../../utils/crypto';
+import { redactOutput } from '../../utils/redact';
 import type { TemplateVariable } from '@idp/shared';
 import { validateVariables } from '@idp/shared';
+
+function encryptState(state: string | null): string | null {
+  return state ? encrypt(state) : null;
+}
+
+function decryptState(state: string | null): string | null {
+  if (!state) return null;
+  try {
+    return decrypt(state);
+  } catch {
+    // Backwards compatibility: return raw state if not encrypted
+    return state;
+  }
+}
 
 interface UserContext {
   sub: string;
@@ -23,6 +40,14 @@ export function getLogEmitter(deploymentId: string): EventEmitter {
     logEmitters.set(deploymentId, new EventEmitter());
   }
   return logEmitters.get(deploymentId)!;
+}
+
+export function cleanupLogEmitter(deploymentId: string) {
+  const emitter = logEmitters.get(deploymentId);
+  if (emitter) {
+    emitter.removeAllListeners();
+    logEmitters.delete(deploymentId);
+  }
 }
 
 export async function list(user?: UserContext) {
@@ -87,6 +112,17 @@ export async function create(data: { name: string; templateId: string; cloudConn
     throw new ValidationError('Variable validation failed', varErrors);
   }
 
+  // Server-side security scan enforcement
+  const securityConfig = await securityService.getConfig();
+  let scanOutput = data.scanOutput || null;
+  if (securityConfig.enabled) {
+    const scanResult = await securityService.scanTemplate(data.templateId, data.variables);
+    scanOutput = JSON.stringify(scanResult);
+    if (securityConfig.enforcement === 'blocking' && !scanResult.passed) {
+      throw new AppError(400, 'Security scan failed. Deployment blocked by policy.');
+    }
+  }
+
   const executionMethod = data.executionMethod || 'local';
 
   const deployment = await prisma.deployment.create({
@@ -95,7 +131,7 @@ export async function create(data: { name: string; templateId: string; cloudConn
       templateId: data.templateId,
       cloudConnectionId: data.cloudConnectionId,
       variables: JSON.stringify(data.variables),
-      scanOutput: data.scanOutput || null,
+      scanOutput,
       executionMethod,
       githubRepo: data.githubRepo || null,
       githubWorkflowId: data.githubWorkflowId || null,
@@ -157,12 +193,13 @@ async function executePlanAndApply(deploymentId: string) {
 
     await prisma.deployment.update({
       where: { id: deploymentId },
-      data: { planOutput: planResult.output, status: planResult.success ? 'planned' : 'failed', errorMessage: planResult.success ? null : planResult.output },
+      data: { planOutput: redactOutput(planResult.output), status: planResult.success ? 'planned' : 'failed', errorMessage: planResult.success ? null : redactOutput(planResult.output) },
     });
 
     if (!planResult.success) {
       emitter.emit('log', { type: 'error', message: 'Plan failed' });
       emitter.emit('log', { type: 'complete', message: 'failed' });
+      setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
       return;
     }
 
@@ -176,22 +213,23 @@ async function executePlanAndApply(deploymentId: string) {
       deployment.template.provider,
       credentials,
       templateVarDefs,
-      deployment.terraformState,
+      decryptState(deployment.terraformState),
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
 
     await prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        applyOutput: applyResult.output,
+        applyOutput: redactOutput(applyResult.output),
         status: applyResult.success ? 'succeeded' : 'failed',
         outputs: applyResult.outputs ? JSON.stringify(applyResult.outputs) : null,
-        errorMessage: applyResult.success ? null : applyResult.output,
-        terraformState: applyResult.state || null,
+        errorMessage: applyResult.success ? null : redactOutput(applyResult.output),
+        terraformState: encryptState(applyResult.state || null),
       },
     });
 
     emitter.emit('log', { type: 'complete', message: applyResult.success ? 'succeeded' : 'failed' });
+    setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
   } catch (err) {
     logger.error(`Deployment ${deploymentId} failed`, { error: (err as Error).message });
     await prisma.deployment.update({
@@ -200,6 +238,7 @@ async function executePlanAndApply(deploymentId: string) {
     });
     emitter.emit('log', { type: 'error', message: (err as Error).message });
     emitter.emit('log', { type: 'complete', message: 'failed' });
+    setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
   }
 }
 
@@ -273,12 +312,14 @@ async function executeRollback(deploymentId: string) {
       where: { id: deploymentId },
       include: { template: true },
     });
-    if (!deployment || !deployment.terraformState) {
+    const rawState = deployment ? decryptState(deployment.terraformState) : null;
+    if (!deployment || !rawState) {
       await prisma.deployment.update({
         where: { id: deploymentId },
         data: { status: 'rolled_back', destroyOutput: 'No state found, marking as rolled back' },
       });
       emitter.emit('log', { type: 'complete', message: 'rolled_back' });
+      setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
       return;
     }
 
@@ -294,21 +335,22 @@ async function executeRollback(deploymentId: string) {
       deployment.template.provider,
       credentials,
       templateVarDefs,
-      deployment.terraformState,
+      rawState,
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
 
     await prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        destroyOutput: result.output,
+        destroyOutput: redactOutput(result.output),
         status: result.success ? 'rolled_back' : 'failed',
-        errorMessage: result.success ? null : result.output,
+        errorMessage: result.success ? null : redactOutput(result.output),
         terraformState: result.success ? null : deployment.terraformState,
       },
     });
 
     emitter.emit('log', { type: 'complete', message: result.success ? 'rolled_back' : 'failed' });
+    setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
   } catch (err) {
     logger.error(`Rollback ${deploymentId} failed`, { error: (err as Error).message });
     await prisma.deployment.update({
@@ -317,6 +359,7 @@ async function executeRollback(deploymentId: string) {
     });
     emitter.emit('log', { type: 'error', message: (err as Error).message });
     emitter.emit('log', { type: 'complete', message: 'failed' });
+    setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
   }
 }
 
@@ -328,12 +371,14 @@ async function executeDestroy(deploymentId: string) {
       where: { id: deploymentId },
       include: { template: true },
     });
-    if (!deployment || !deployment.terraformState) {
+    const rawState = deployment ? decryptState(deployment.terraformState) : null;
+    if (!deployment || !rawState) {
       await prisma.deployment.update({
         where: { id: deploymentId },
         data: { status: 'destroyed', destroyOutput: 'No state found, marking as destroyed' },
       });
       emitter.emit('log', { type: 'complete', message: 'destroyed' });
+      setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
       return;
     }
 
@@ -349,21 +394,22 @@ async function executeDestroy(deploymentId: string) {
       deployment.template.provider,
       credentials,
       templateVarDefs,
-      deployment.terraformState,
+      rawState,
       (msg) => emitter.emit('log', { type: 'log', message: msg }),
     );
 
     await prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        destroyOutput: result.output,
+        destroyOutput: redactOutput(result.output),
         status: result.success ? 'destroyed' : 'failed',
-        errorMessage: result.success ? null : result.output,
+        errorMessage: result.success ? null : redactOutput(result.output),
         terraformState: result.success ? null : deployment.terraformState,
       },
     });
 
     emitter.emit('log', { type: 'complete', message: result.success ? 'destroyed' : 'failed' });
+    setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
   } catch (err) {
     logger.error(`Destroy ${deploymentId} failed`, { error: (err as Error).message });
     await prisma.deployment.update({
@@ -372,6 +418,7 @@ async function executeDestroy(deploymentId: string) {
     });
     emitter.emit('log', { type: 'error', message: (err as Error).message });
     emitter.emit('log', { type: 'complete', message: 'failed' });
+    setTimeout(() => cleanupLogEmitter(deploymentId), 5000);
   }
 }
 

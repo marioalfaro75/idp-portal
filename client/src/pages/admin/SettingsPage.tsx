@@ -1,21 +1,41 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/auth-store';
 import { useUiStore } from '../../stores/ui-store';
 import { usersApi } from '../../api/users';
 import { authApi } from '../../api/auth';
+import { federationApi } from '../../api/federation';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Theme = 'light' | 'dark' | 'system';
 
 export function SettingsPage() {
+  const { data: federationData } = useQuery({
+    queryKey: ['federation-providers'],
+    queryFn: federationApi.listEnabled,
+    staleTime: 60_000,
+  });
+
+  const localPasswordDisabled = federationData?.localPasswordDisabled ?? false;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">User Settings</h1>
       <ProfileSection />
-      <PasswordSection />
+      {localPasswordDisabled ? (
+        <Card title="Change Password">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <Info className="w-4 h-4 shrink-0" />
+            <span>Password management is disabled. Your organization uses SSO.</span>
+          </div>
+        </Card>
+      ) : (
+        <PasswordSection />
+      )}
       <AppearanceSection />
       <SidebarSection />
     </div>

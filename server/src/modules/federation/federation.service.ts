@@ -1,7 +1,8 @@
 import { prisma } from '../../prisma';
 import { encrypt, decrypt } from '../../utils/crypto';
-import { NotFoundError, AppError } from '../../utils/errors';
+import { NotFoundError, AppError, ConflictError } from '../../utils/errors';
 import { issueSessionToken } from '../auth/auth.service';
+import * as settingsService from '../settings/settings.service';
 import { logger } from '../../utils/logger';
 import type {
   FederationProviderPublic,
@@ -117,6 +118,19 @@ export async function update(id: string, data: UpdateFederationProviderRequest):
   const existing = await prisma.federationProvider.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Federation provider');
 
+  // Prevent disabling the last SSO provider when local auth is off
+  if (data.enabled === false && existing.enabled) {
+    const localPasswordDisabled = (await settingsService.get('auth.localPasswordDisabled')) === 'true';
+    if (localPasswordDisabled) {
+      const otherEnabledCount = await prisma.federationProvider.count({
+        where: { enabled: true, id: { not: id } },
+      });
+      if (otherEnabledCount === 0) {
+        throw new ConflictError('Cannot disable the last SSO provider while local password authentication is disabled');
+      }
+    }
+  }
+
   const updateData: Record<string, unknown> = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.slug !== undefined) updateData.slug = data.slug;
@@ -150,7 +164,84 @@ export async function update(id: string, data: UpdateFederationProviderRequest):
 export async function remove(id: string): Promise<void> {
   const existing = await prisma.federationProvider.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Federation provider');
+
+  // Prevent deleting the last SSO provider when local auth is off
+  if (existing.enabled) {
+    const localPasswordDisabled = (await settingsService.get('auth.localPasswordDisabled')) === 'true';
+    if (localPasswordDisabled) {
+      const otherEnabledCount = await prisma.federationProvider.count({
+        where: { enabled: true, id: { not: id } },
+      });
+      if (otherEnabledCount === 0) {
+        throw new ConflictError('Cannot delete the last enabled SSO provider while local password authentication is disabled');
+      }
+    }
+  }
+
   await prisma.federationProvider.delete({ where: { id } });
+}
+
+// --- Export / Import ---
+
+export async function exportAll() {
+  const providers = await prisma.federationProvider.findMany({
+    include: { defaultRole: { select: { name: true } } },
+  });
+  return providers.map((p) => ({
+    name: p.name,
+    slug: p.slug,
+    protocol: p.protocol,
+    providerType: p.providerType,
+    enabled: p.enabled,
+    autoCreateUsers: p.autoCreateUsers,
+    defaultRoleName: p.defaultRole.name,
+    config: JSON.parse(decrypt(p.config)),
+  }));
+}
+
+export async function importProviders(data: Array<{
+  name: string;
+  slug: string;
+  protocol: string;
+  providerType: string;
+  enabled: boolean;
+  autoCreateUsers: boolean;
+  defaultRoleName: string;
+  config: Record<string, unknown>;
+}>): Promise<number> {
+  let count = 0;
+  for (const item of data) {
+    const role = await prisma.role.findUnique({ where: { name: item.defaultRoleName } });
+    if (!role) {
+      logger.warn(`Import skipped provider "${item.name}": role "${item.defaultRoleName}" not found`);
+      continue;
+    }
+    const encryptedConfig = encrypt(JSON.stringify(item.config));
+    await prisma.federationProvider.upsert({
+      where: { slug: item.slug },
+      create: {
+        name: item.name,
+        slug: item.slug,
+        protocol: item.protocol,
+        providerType: item.providerType,
+        enabled: item.enabled,
+        autoCreateUsers: item.autoCreateUsers,
+        defaultRoleId: role.id,
+        config: encryptedConfig,
+      },
+      update: {
+        name: item.name,
+        protocol: item.protocol,
+        providerType: item.providerType,
+        enabled: item.enabled,
+        autoCreateUsers: item.autoCreateUsers,
+        defaultRoleId: role.id,
+        config: encryptedConfig,
+      },
+    });
+    count++;
+  }
+  return count;
 }
 
 // --- User Resolution ---

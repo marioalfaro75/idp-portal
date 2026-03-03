@@ -257,7 +257,12 @@ export function CloudConnectionsPage() {
       header: 'Status',
       render: (c: CloudConnection) => (
         <div>
-          <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+            {(c.credentialAge ?? 0) > 90 && (
+              <Badge variant="warning" title={`Credentials last updated ${c.credentialAge} days ago`}>Rotate</Badge>
+            )}
+          </div>
           {c.lastValidatedAt && (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Checked {timeAgo(c.lastValidatedAt)}</p>
           )}

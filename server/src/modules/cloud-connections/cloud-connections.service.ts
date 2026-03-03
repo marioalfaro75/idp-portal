@@ -140,6 +140,7 @@ function formatConnection(conn: any) {
     lastValidatedAt: conn.lastValidatedAt ? conn.lastValidatedAt.toISOString() : null,
     metadata,
     deploymentCount: conn._count?.deployments ?? 0,
+    credentialAge: Math.floor((Date.now() - new Date(conn.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
     createdById: conn.createdById,
     createdBy: conn.createdBy ?? undefined,
     createdAt: conn.createdAt.toISOString(),

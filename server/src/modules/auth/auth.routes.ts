@@ -10,9 +10,14 @@ import * as auditService from '../audit/audit.service';
 const router = Router();
 
 router.post('/login', authLimiter, validate(loginSchema), asyncHandler(async (req, res) => {
-  const result = await authService.login(req.body.email, req.body.password);
-  await auditService.log({ action: 'login', resource: 'auth', userId: result.user.id, ipAddress: req.ip, details: { email: req.body.email } });
-  res.json(result);
+  try {
+    const result = await authService.login(req.body.email, req.body.password);
+    await auditService.log({ action: 'login', resource: 'auth', userId: result.user.id, ipAddress: req.ip, details: { email: req.body.email } });
+    res.json(result);
+  } catch (err) {
+    await auditService.log({ action: 'login_failed', resource: 'auth', userId: null as any, ipAddress: req.ip, details: { email: req.body.email } }).catch(() => {});
+    throw err;
+  }
 }));
 
 router.post('/setup', authLimiter, validate(setupSchema), asyncHandler(async (req, res) => {

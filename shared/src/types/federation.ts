@@ -67,3 +67,8 @@ export interface UpdateFederationProviderRequest {
   defaultRoleId?: string;
   config?: FederationConfig;
 }
+
+export interface FederationProvidersResponse {
+  providers: FederationProviderPublic[];
+  localPasswordDisabled: boolean;
+}

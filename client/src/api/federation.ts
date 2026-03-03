@@ -1,8 +1,8 @@
 import api from './client';
 import type {
-  FederationProviderPublic,
   FederationProviderAdmin,
   FederationProviderDetail,
+  FederationProvidersResponse,
   CreateFederationProviderRequest,
   UpdateFederationProviderRequest,
 } from '@idp/shared';
@@ -10,7 +10,7 @@ import type {
 export const federationApi = {
   /** List enabled providers (public, no auth needed) */
   listEnabled: () =>
-    api.get<FederationProviderPublic[]>('/federation/providers').then((r) => r.data),
+    api.get<FederationProvidersResponse>('/federation/providers').then((r) => r.data),
 
   /** Get login URL for a provider — returns the redirect URL */
   getLoginUrl: (slug: string) =>

@@ -89,6 +89,23 @@ export async function getInstallationOwner(): Promise<string | null> {
   }
 }
 
+export async function testPrivateKey(
+  appId: string,
+  installationId: string,
+  privateKey: string,
+): Promise<{ valid: boolean; message: string }> {
+  try {
+    const octokit = new Octokit({
+      authStrategy: createAppAuth,
+      auth: { appId, privateKey, installationId: Number(installationId) },
+    });
+    const { data } = await octokit.rest.apps.getAuthenticated();
+    return { valid: true, message: `Authenticated as ${data?.name || 'GitHub App'}` };
+  } catch (err: any) {
+    return { valid: false, message: err.message };
+  }
+}
+
 export function invalidateCache(): void {
   cachedOctokit = null;
   cacheTimestamp = 0;

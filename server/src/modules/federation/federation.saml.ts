@@ -30,10 +30,10 @@ function createSaml(provider: ProviderWithConfig): SAML {
   });
 }
 
-export async function getSamlLoginUrl(provider: ProviderWithConfig): Promise<string> {
+export async function getSamlLoginUrl(provider: ProviderWithConfig, relayState?: string): Promise<string> {
   const saml = createSaml(provider);
   try {
-    const url = await saml.getAuthorizeUrlAsync('', undefined, {});
+    const url = await saml.getAuthorizeUrlAsync(relayState || '', undefined, {});
     return url;
   } catch (err) {
     logger.error(`SAML login URL generation failed for ${provider.slug}`, { error: (err as Error).message });

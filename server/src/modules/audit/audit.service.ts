@@ -1,5 +1,6 @@
 import { prisma } from '../../prisma';
 import { logger } from '../../utils/logger';
+import * as settingsService from '../settings/settings.service';
 
 interface AuditEntry {
   action: string;
@@ -25,6 +26,14 @@ export async function log(entry: AuditEntry) {
   } catch (err) {
     logger.error('Failed to write audit log', { error: (err as Error).message });
   }
+}
+
+export async function cleanupOldLogs() {
+  const retentionDays = parseInt(await settingsService.get('audit.retentionDays') || '0');
+  if (retentionDays <= 0) return; // 0 = keep forever
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const { count } = await prisma.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (count > 0) logger.info(`Cleaned up ${count} audit log(s) older than ${retentionDays} days`);
 }
 
 export async function list(query: { action?: string; resource?: string; userId?: string; page?: number; limit?: number }) {

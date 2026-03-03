@@ -9,3 +9,4 @@ export * from './group';
 export * from './template';
 export * from './federation';
 export * from './security';
+export * from './role';

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { settingsApi } from '../../api/settings';
 import { federationApi } from '../../api/federation';
@@ -186,18 +186,19 @@ function ProviderModal({
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: rolesApi.list });
 
   // Load existing provider data for editing
-  useQuery({
+  const { data: providerDetail } = useQuery({
     queryKey: ['federation-provider-detail', editingId],
     queryFn: () => federationApi.getById(editingId!),
     enabled: !!editingId && open,
-    onSuccess: (detail: FederationProviderDetail) => {
-      if (!loaded) {
-        setForm(detailToForm(detail));
-        setAutoSlug(false);
-        setLoaded(true);
-      }
-    },
-  } as any);
+  });
+
+  useEffect(() => {
+    if (providerDetail && !loaded) {
+      setForm(detailToForm(providerDetail));
+      setAutoSlug(false);
+      setLoaded(true);
+    }
+  }, [providerDetail, loaded]);
 
   // Reset when modal opens/closes
   const handleClose = () => {
@@ -916,6 +917,40 @@ function PortalAdminContent() {
             </Button>
           </div>
 
+          <div className="border-t dark:border-gray-700 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Disable Local Password Login</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">When enabled, users must sign in via SSO. The original setup admin can always log in with a password.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings['auth.localPasswordDisabled'] === 'true'}
+                  onChange={async (e) => {
+                    const newValue = e.target.checked;
+                    if (newValue) {
+                      const hasEnabled = providers.some((p) => p.enabled);
+                      if (!hasEnabled) {
+                        toast.error('Enable at least one federation provider before disabling local passwords.');
+                        return;
+                      }
+                    }
+                    try {
+                      await settingsApi.set('auth.localPasswordDisabled', newValue ? 'true' : 'false');
+                      queryClient.invalidateQueries({ queryKey: ['settings'] });
+                      toast.success(newValue ? 'Local password login disabled' : 'Local password login enabled');
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.error?.message || 'Failed to update setting');
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600" />
+              </label>
+            </div>
+          </div>
+
           {loadingProviders ? (
             <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" /></div>
           ) : providers.length === 0 ? (
@@ -943,7 +978,16 @@ function PortalAdminContent() {
                       <input
                         type="checkbox"
                         checked={p.enabled}
-                        onChange={() => toggleMutation.mutate({ id: p.id, enabled: !p.enabled })}
+                        onChange={() => {
+                          if (p.enabled && settings['auth.localPasswordDisabled'] === 'true') {
+                            const otherEnabled = providers.filter((op) => op.id !== p.id && op.enabled);
+                            if (otherEnabled.length === 0) {
+                              toast.error('Cannot disable the last SSO provider while local password authentication is disabled');
+                              return;
+                            }
+                          }
+                          toggleMutation.mutate({ id: p.id, enabled: !p.enabled });
+                        }}
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600" />

@@ -44,11 +44,14 @@ export function LoginPage() {
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
 
-  const { data: providers = [] } = useQuery({
+  const { data: federationData } = useQuery({
     queryKey: ['federation-providers'],
     queryFn: federationApi.listEnabled,
     staleTime: 60_000,
   });
+
+  const providers = federationData?.providers ?? [];
+  const localPasswordDisabled = federationData?.localPasswordDisabled ?? false;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,25 +75,31 @@ export function LoginPage() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">IDP Portal</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-2">Sign in to your account</p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 space-y-4">
-          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <Button type="submit" loading={loading} className="w-full">
-            Sign In
-          </Button>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 space-y-4">
+          {!localPasswordDisabled && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Button type="submit" loading={loading} className="w-full">
+                Sign In
+              </Button>
+            </form>
+          )}
 
           {providers.length > 0 && (
             <>
-              <div className="relative my-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+              {!localPasswordDisabled && (
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      Or continue with
+                    </span>
+                  </div>
                 </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                    Or continue with
-                  </span>
-                </div>
-              </div>
+              )}
               <div className="space-y-2">
                 {providers.map((p) => (
                   <ProviderButton key={p.slug} provider={p} />
@@ -98,7 +107,13 @@ export function LoginPage() {
               </div>
             </>
           )}
-        </form>
+
+          {localPasswordDisabled && providers.length === 0 && (
+            <p className="text-center text-gray-500 dark:text-gray-400">
+              No sign-in methods are currently available. Contact your administrator.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ export interface CloudConnection {
   lastValidatedAt: string | null;
   metadata: CloudConnectionMetadata;
   deploymentCount: number;
+  credentialAge?: number;
   createdById: string;
   createdBy?: { id: string; displayName: string };
   createdAt: string;

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth-store';
 import toast from 'react-hot-toast';
@@ -7,8 +7,11 @@ export function OAuthCallbackPage() {
   const [params] = useSearchParams();
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
+  const processed = useRef(false);
 
   useEffect(() => {
+    if (processed.current) return;
+    processed.current = true;
     const token = params.get('token');
     const error = params.get('error');
 

@@ -10,6 +10,7 @@ import { getAppOctokit, isAppConfigured } from '../github/github-app';
 import { ensureWorkflowDispatch, fixSetupTerraformWrapper, fixTerraformFmtCheck, fixTerraformApplyCondition, fixWorkingDirectory, fixTerraformEnvVars, fixTerraformDestroyStep, fixTerraformStatePersistence } from '../github/workflow-validator';
 import type { TemplateVariable } from '@idp/shared';
 import { generateTfvarsJson } from '../../utils/tfvars';
+import { redactOutput } from '../../utils/redact';
 
 function parseRepo(repo: string): { owner: string; repo: string } {
   const [owner, name] = repo.split('/');
@@ -672,7 +673,7 @@ export async function pollGitHubDeployments(): Promise<void> {
           };
 
           if (run.status === 'completed' && logData.logs) {
-            updateData[outputField] = logData.logs;
+            updateData[outputField] = redactOutput(logData.logs);
 
             // Extract Terraform outputs from logs on successful apply
             if (newStatus === 'succeeded') {

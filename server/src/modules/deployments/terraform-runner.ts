@@ -78,6 +78,14 @@ function runCommand(command: string, args: string[], cwd: string, env: Record<st
   });
 }
 
+function validateTemplatePath(templatePath: string) {
+  const abs = path.resolve(templatePath);
+  const allowed = path.resolve('templates');
+  if (!abs.startsWith(allowed + path.sep) && abs !== allowed) {
+    throw new Error('Template path outside allowed directory');
+  }
+}
+
 function buildEnvVars(provider: string, credentials: Record<string, unknown>): Record<string, string> {
   switch (provider) {
     case 'aws':
@@ -111,6 +119,7 @@ export async function plan(
   templateVarDefs: TemplateVariable[],
   onLog?: LogCallback,
 ): Promise<TerraformResult> {
+  validateTemplatePath(templatePath);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'idp-tf-'));
   const absTemplatePath = path.resolve(templatePath);
 
@@ -155,6 +164,7 @@ export async function apply(
   existingState?: string | null,
   onLog?: LogCallback,
 ): Promise<TerraformResult> {
+  validateTemplatePath(templatePath);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'idp-tf-'));
   const absTemplatePath = path.resolve(templatePath);
 
@@ -222,6 +232,7 @@ export async function destroy(
   terraformState: string,
   onLog?: LogCallback,
 ): Promise<TerraformResult> {
+  validateTemplatePath(templatePath);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'idp-tf-'));
   const absTemplatePath = path.resolve(templatePath);
 

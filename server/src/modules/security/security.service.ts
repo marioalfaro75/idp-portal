@@ -87,6 +87,10 @@ export async function scanTemplate(templateId: string, variables?: Record<string
   if (!template) throw new NotFoundError('Template');
 
   const templatePath = path.resolve(template.templatePath);
+  const allowedBase = path.resolve('templates');
+  if (!templatePath.startsWith(allowedBase + path.sep) && templatePath !== allowedBase) {
+    throw new Error('Template path outside allowed directory');
+  }
   if (!fs.existsSync(templatePath)) {
     throw new NotFoundError('Template directory not found on disk');
   }

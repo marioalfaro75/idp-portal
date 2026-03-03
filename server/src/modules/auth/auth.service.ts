@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuid } from 'uuid';
 import { prisma } from '../../prisma';
 import { UnauthorizedError, ConflictError, AppError } from '../../utils/errors';
+import * as settingsService from '../settings/settings.service';
 import type { AuthResponse, JwtPayload } from '@idp/shared';
 
 export function generateToken(user: { id: string; email: string }, role: { name: string; permissions: string }): { token: string; jti: string; expiresAt: Date } {
@@ -29,6 +30,14 @@ export async function login(email: string, password: string): Promise<AuthRespon
   }
   if (!user.isActive) {
     throw new UnauthorizedError('Account is disabled');
+  }
+
+  const localAuthDisabled = (await settingsService.get('auth.localPasswordDisabled')) === 'true';
+  if (localAuthDisabled) {
+    const setupAdminId = await settingsService.get('setup.adminUserId');
+    if (user.id !== setupAdminId) {
+      throw new UnauthorizedError('Local password login is disabled. Please use SSO.');
+    }
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
@@ -78,6 +87,7 @@ export async function setup(email: string, password: string, displayName: string
   });
 
   await prisma.systemSetting.create({ data: { key: 'setup.complete', value: 'true' } });
+  await prisma.systemSetting.create({ data: { key: 'setup.adminUserId', value: user.id } });
 
   const { token, jti, expiresAt } = generateToken(user, user.role);
   await prisma.session.create({ data: { jti, userId: user.id, expiresAt } });
@@ -107,6 +117,14 @@ export async function isSetupComplete(): Promise<boolean> {
 }
 
 export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const localAuthDisabled = (await settingsService.get('auth.localPasswordDisabled')) === 'true';
+  if (localAuthDisabled) {
+    const setupAdminId = await settingsService.get('setup.adminUserId');
+    if (userId !== setupAdminId) {
+      throw new UnauthorizedError('Password changes are disabled when local authentication is off.');
+    }
+  }
+
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.passwordHash) {
     throw new UnauthorizedError('User not found');
@@ -142,6 +160,20 @@ export async function issueSessionToken(userId: string): Promise<AuthResponse> {
       },
     },
   };
+}
+
+/** Backfill setup.adminUserId for databases created before this feature */
+export async function backfillSetupAdminId(): Promise<void> {
+  const existing = await settingsService.get('setup.adminUserId');
+  if (existing) return;
+
+  const setupComplete = await settingsService.get('setup.complete');
+  if (setupComplete !== 'true') return;
+
+  const firstUser = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
+  if (firstUser) {
+    await prisma.systemSetting.create({ data: { key: 'setup.adminUserId', value: firstUser.id } });
+  }
 }
 
 export async function getMe(userId: string): Promise<AuthResponse['user']> {

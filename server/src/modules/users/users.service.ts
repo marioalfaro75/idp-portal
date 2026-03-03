@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../prisma';
-import { NotFoundError, ConflictError } from '../../utils/errors';
+import { NotFoundError, ConflictError, ForbiddenError } from '../../utils/errors';
 import type { CreateUserRequest, UpdateUserRequest } from '@idp/shared';
 
 export async function listUsers() {
@@ -50,6 +50,15 @@ export async function updateUser(id: string, data: UpdateUserRequest) {
     data: updateData,
     include: { role: true },
   });
+
+  // Invalidate sessions when role changes or account deactivated
+  if (data.roleId && data.roleId !== user.roleId) {
+    await prisma.session.deleteMany({ where: { userId: id } });
+  }
+  if (data.isActive === false) {
+    await prisma.session.deleteMany({ where: { userId: id } });
+  }
+
   return formatUser(updated);
 }
 
@@ -68,7 +77,24 @@ export async function updateSelf(userId: string, data: { displayName: string }) 
 export async function deleteUser(id: string) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new NotFoundError('User');
-  await prisma.user.delete({ where: { id } });
+
+  // Check for active resources that would break FK constraints
+  const deploymentCount = await prisma.deployment.count({ where: { createdById: id } });
+  if (deploymentCount > 0) {
+    throw new ConflictError('Cannot delete user with existing deployments. Deactivate the account instead.');
+  }
+  const serviceCount = await prisma.service.count({ where: { createdById: id } });
+  if (serviceCount > 0) {
+    throw new ConflictError('Cannot delete user with existing services. Deactivate the account instead.');
+  }
+
+  // Clean up related records and delete user in a transaction
+  await prisma.$transaction([
+    prisma.session.deleteMany({ where: { userId: id } }),
+    prisma.groupMember.deleteMany({ where: { userId: id } }),
+    prisma.oAuthAccount.deleteMany({ where: { userId: id } }),
+    prisma.user.delete({ where: { id } }),
+  ]);
 }
 
 export async function setUserGroups(userId: string, groupIds: string[]) {

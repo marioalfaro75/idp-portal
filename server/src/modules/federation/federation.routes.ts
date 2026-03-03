@@ -1,15 +1,18 @@
 import { Router } from 'express';
 import express from 'express';
+import crypto from 'node:crypto';
 import { asyncHandler } from '../../utils/async-handler';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
+import { authLimiter } from '../../middleware/rate-limiter';
 import { PERMISSIONS } from '@idp/shared';
 import { createFederationProviderSchema, updateFederationProviderSchema } from './federation.validators';
 import * as federationService from './federation.service';
 import * as oidcHandler from './federation.oidc';
 import * as samlHandler from './federation.saml';
 import * as auditService from '../audit/audit.service';
+import * as settingsService from '../settings/settings.service';
 
 const router = Router();
 
@@ -19,10 +22,11 @@ const clientUrl = () => process.env.CLIENT_URL || 'http://localhost:5173';
 
 router.get('/providers', asyncHandler(async (_req, res) => {
   const providers = await federationService.listEnabled();
-  res.json(providers);
+  const localPasswordDisabled = (await settingsService.get('auth.localPasswordDisabled')) === 'true';
+  res.json({ providers, localPasswordDisabled });
 }));
 
-router.get('/:slug/login', asyncHandler(async (req, res) => {
+router.get('/:slug/login', authLimiter, asyncHandler(async (req, res) => {
   const provider = await federationService.getBySlug(req.params.slug);
   if (!provider.enabled) {
     res.redirect(`${clientUrl()}/auth/callback?error=${encodeURIComponent('Identity provider not available')}`);
@@ -40,7 +44,14 @@ router.get('/:slug/login', asyncHandler(async (req, res) => {
     });
     res.redirect(url);
   } else if (provider.protocol === 'saml') {
-    const url = await samlHandler.getSamlLoginUrl(provider as any);
+    const state = crypto.randomUUID();
+    res.cookie('federation_state', state, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 5 * 60 * 1000,
+      secure: process.env.NODE_ENV === 'production',
+    });
+    const url = await samlHandler.getSamlLoginUrl(provider as any, state);
     res.redirect(url);
   } else {
     res.redirect(`${clientUrl()}/auth/callback?error=${encodeURIComponent('Unsupported protocol')}`);
@@ -48,7 +59,7 @@ router.get('/:slug/login', asyncHandler(async (req, res) => {
 }));
 
 // OIDC callback (GET)
-router.get('/:slug/callback', asyncHandler(async (req, res) => {
+router.get('/:slug/callback', authLimiter, asyncHandler(async (req, res) => {
   const slug = req.params.slug;
   try {
     const provider = await federationService.getBySlug(slug);
@@ -87,12 +98,13 @@ router.get('/:slug/callback', asyncHandler(async (req, res) => {
     const userParam = Buffer.from(JSON.stringify(result.user)).toString('base64');
     res.redirect(`${clientUrl()}/auth/callback?token=${result.token}&user=${userParam}`);
   } catch (err: any) {
+    await auditService.log({ action: 'federation_login_failed', resource: 'auth', userId: null as any, ipAddress: req.ip, details: { provider: slug, protocol: 'oidc', error: err.message } }).catch(() => {});
     res.redirect(`${clientUrl()}/auth/callback?error=${encodeURIComponent(err.message || 'Authentication failed')}`);
   }
 }));
 
 // SAML callback (POST with URL-encoded body)
-router.post('/:slug/callback', express.urlencoded({ extended: false }), asyncHandler(async (req, res) => {
+router.post('/:slug/callback', authLimiter, express.urlencoded({ extended: false }), asyncHandler(async (req, res) => {
   const slug = req.params.slug;
   try {
     const provider = await federationService.getBySlug(slug);
@@ -106,6 +118,15 @@ router.post('/:slug/callback', express.urlencoded({ extended: false }), asyncHan
       return;
     }
 
+    // Verify state cookie (CSRF protection)
+    const expectedState = req.cookies?.federation_state;
+    const actualState = req.body.RelayState;
+    if (!expectedState || expectedState !== actualState) {
+      res.redirect(`${clientUrl()}/auth/callback?error=${encodeURIComponent('Invalid state parameter')}`);
+      return;
+    }
+    res.clearCookie('federation_state');
+
     const profile = await samlHandler.handleSamlCallback(provider as any, req.body);
     const result = await federationService.resolveUser(
       { providerType: provider.providerType, autoCreateUsers: provider.autoCreateUsers, defaultRoleId: provider.defaultRoleId },
@@ -117,6 +138,7 @@ router.post('/:slug/callback', express.urlencoded({ extended: false }), asyncHan
     const userParam = Buffer.from(JSON.stringify(result.user)).toString('base64');
     res.redirect(`${clientUrl()}/auth/callback?token=${result.token}&user=${userParam}`);
   } catch (err: any) {
+    await auditService.log({ action: 'federation_login_failed', resource: 'auth', userId: null as any, ipAddress: req.ip, details: { provider: slug, protocol: 'saml', error: err.message } }).catch(() => {});
     res.redirect(`${clientUrl()}/auth/callback?error=${encodeURIComponent(err.message || 'Authentication failed')}`);
   }
 }));
@@ -137,6 +159,24 @@ router.get('/:slug/metadata', asyncHandler(async (req, res) => {
 router.get('/admin/providers', authenticate, authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(async (_req, res) => {
   const providers = await federationService.listAll();
   res.json(providers);
+}));
+
+// Export all providers (decrypted configs) — must be before /:id route
+router.get('/admin/providers/export', authenticate, authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(async (req, res) => {
+  const data = await federationService.exportAll();
+  await auditService.log({ action: 'federation_export', resource: 'federation', userId: req.user!.sub, ipAddress: req.ip });
+  res.json(data);
+}));
+
+// Import providers — must be before /:id route
+router.post('/admin/providers/import', authenticate, authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(async (req, res) => {
+  if (!Array.isArray(req.body)) {
+    res.status(400).json({ error: { message: 'Request body must be a JSON array of providers' } });
+    return;
+  }
+  const count = await federationService.importProviders(req.body);
+  await auditService.log({ action: 'federation_import', resource: 'federation', userId: req.user!.sub, ipAddress: req.ip, details: { count } });
+  res.json({ imported: count });
 }));
 
 router.get('/admin/providers/:id', authenticate, authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(async (req, res) => {

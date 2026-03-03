@@ -5,6 +5,7 @@ dotenv.config();
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error-handler';
 import { apiLimiter } from './middleware/rate-limiter';
@@ -26,17 +27,35 @@ import groupsRoutes from './modules/groups/groups.routes';
 import federationRoutes from './modules/federation/federation.routes';
 import { pollWorkflowRuns } from './modules/services/workflow-poller';
 import { migrateLegacyOidc } from './modules/federation/federation.service';
+import { backfillSetupAdminId } from './modules/auth/auth.service';
 import helpRoutes from './modules/help/help.routes';
 import updatesRoutes from './modules/updates/updates.routes';
 import securityRoutes from './modules/security/security.routes';
 import { logToolAvailability } from './modules/security/security-tools';
+import { cleanupOldLogs } from './modules/audit/audit.service';
 import { getBuildInfo } from './utils/build-info';
+import { prisma } from './prisma';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use('/api', apiLimiter);
@@ -90,11 +109,27 @@ app.listen(PORT, () => {
   // Migrate legacy OIDC settings to federation providers
   migrateLegacyOidc().catch((err) => logger.error('Legacy OIDC migration failed', { error: (err as Error).message }));
 
+  // Backfill setup admin ID for databases created before the local-auth-disable feature
+  backfillSetupAdminId().catch((err) => logger.error('Setup admin backfill failed', { error: (err as Error).message }));
+
   // Start GitHub deployment poller
   setInterval(pollGitHubDeployments, 30_000);
 
   // Start workflow run poller
   setInterval(pollWorkflowRuns, 30_000);
+
+  // Cleanup expired sessions on startup and every hour
+  const cleanupExpiredSessions = () => {
+    prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+      .then(({ count }) => { if (count > 0) logger.info(`Cleaned up ${count} expired session(s)`); })
+      .catch((err) => logger.error('Session cleanup failed', { error: (err as Error).message }));
+  };
+  cleanupExpiredSessions();
+  setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+
+  // Cleanup old audit logs on startup and daily
+  cleanupOldLogs().catch((err) => logger.error('Audit log cleanup failed', { error: (err as Error).message }));
+  setInterval(() => cleanupOldLogs().catch((err) => logger.error('Audit log cleanup failed', { error: (err as Error).message })), 24 * 60 * 60 * 1000);
 });
 
 export default app;

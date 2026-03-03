@@ -5,6 +5,7 @@ import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
 import { PERMISSIONS, dispatchWorkflowSchema, saveGitHubAppConfigSchema } from '@idp/shared';
 import * as service from './github.service';
+import { testPrivateKey } from './github-app';
 import * as auditService from '../audit/audit.service';
 
 const router = Router();
@@ -34,6 +35,17 @@ router.delete('/app/config', authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(a
 // Admin-only: test app connection
 router.get('/app/test', authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(async (_req, res) => {
   const result = await service.testAppConnection();
+  res.json(result);
+}));
+
+// Admin-only: test a private key before saving
+router.post('/app/test-key', authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(async (req, res) => {
+  const { appId, installationId, privateKey } = req.body;
+  if (!appId || !installationId || !privateKey) {
+    res.status(400).json({ error: { message: 'appId, installationId, and privateKey are required' } });
+    return;
+  }
+  const result = await testPrivateKey(appId, installationId, privateKey);
   res.json(result);
 }));
 

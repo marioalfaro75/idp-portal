@@ -8,8 +8,13 @@ import * as service from './deployments.service';
 import * as auditService from '../audit/audit.service';
 import jwt from 'jsonwebtoken';
 import type { JwtPayload } from '@idp/shared';
+import { prisma } from '../../prisma';
 
 const router = Router();
+
+// Track active SSE connections per user
+const sseConnections = new Map<string, number>();
+const MAX_SSE_PER_USER = 10;
 
 router.use(authenticate);
 
@@ -60,19 +65,43 @@ router.post('/:id/rollback', authorize(PERMISSIONS.DEPLOYMENTS_DESTROY), asyncHa
 }));
 
 // SSE endpoint for deployment logs - auth via query param since EventSource can't set headers
-router.get('/:id/logs', (req, res) => {
+router.get('/:id/logs', async (req, res) => {
   const token = req.query.token as string;
   if (!token) {
     res.status(401).json({ error: { message: 'No token' } });
     return;
   }
 
+  let payload: JwtPayload;
   try {
-    jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+    payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
   } catch {
     res.status(401).json({ error: { message: 'Invalid token' } });
     return;
   }
+
+  // Session validation (same as authenticate middleware)
+  const session = await prisma.session.findUnique({ where: { jti: payload.jti } });
+  if (!session || session.expiresAt < new Date()) {
+    res.status(401).json({ error: { message: 'Session expired or revoked' } });
+    return;
+  }
+
+  // Permission check
+  const permissions = payload.permissions || [];
+  if (!permissions.includes(PERMISSIONS.DEPLOYMENTS_LIST)) {
+    res.status(403).json({ error: { message: 'Insufficient permissions' } });
+    return;
+  }
+
+  // Enforce per-user SSE connection limit
+  const userId = payload.sub;
+  const currentCount = sseConnections.get(userId) || 0;
+  if (currentCount >= MAX_SSE_PER_USER) {
+    res.status(429).json({ error: { message: 'Too many SSE connections' } });
+    return;
+  }
+  sseConnections.set(userId, currentCount + 1);
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -89,7 +118,12 @@ router.get('/:id/logs', (req, res) => {
   };
 
   emitter.on('log', handler);
-  req.on('close', () => emitter.removeListener('log', handler));
+  req.on('close', () => {
+    emitter.removeListener('log', handler);
+    const count = sseConnections.get(userId) || 1;
+    if (count <= 1) sseConnections.delete(userId);
+    else sseConnections.set(userId, count - 1);
+  });
 });
 
 export default router;

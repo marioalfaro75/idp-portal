@@ -147,7 +147,7 @@ router.put('/terraform/path', authorize(PERMISSIONS.SETTINGS_MANAGE), asyncHandl
 
 // --- General settings endpoints ---
 
-const PORTAL_ADMIN_KEY_PREFIXES = ['github.'];
+const PORTAL_ADMIN_KEY_PREFIXES = ['github.', 'auth.', 'setup.', 'security.', 'terraform.'];
 
 function isPortalAdminKey(key: string): boolean {
   return PORTAL_ADMIN_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
