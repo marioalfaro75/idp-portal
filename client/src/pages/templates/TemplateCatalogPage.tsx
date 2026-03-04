@@ -48,7 +48,15 @@ export function TemplateCatalogPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Template Catalog</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Template Catalog</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Pre-built Terraform blueprints for provisioning cloud infrastructure. Pick a template, configure variables, and deploy — or scaffold into a GitHub repo as a Service.{' '}
+            <Link to="/help" className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+              Learn more &rarr;
+            </Link>
+          </p>
+        </div>
         {hasPermission(PERMISSIONS.TEMPLATES_SYNC) && (
           <Button variant="secondary" onClick={handleSync}>
             <RefreshCw className="w-4 h-4 mr-2" /> Sync Templates

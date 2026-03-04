@@ -326,10 +326,21 @@ async function ensureWorkflowReady(
 
     // Wait for GitHub to process the commit before dispatching
     await new Promise((resolve) => setTimeout(resolve, 2000));
-  } catch (err) {
-    logger.warn(`Workflow validation failed for deployment ${deploymentId}`, { error: (err as Error).message });
-    const emitter = getLogEmitter(deploymentId);
-    emitter.emit('log', { type: 'warning', message: `Workflow validation skipped: ${(err as Error).message}` });
+  } catch (err: any) {
+    const message = (err as Error).message || String(err);
+    logger.warn(`Workflow validation failed for deployment ${deploymentId}`, { error: message });
+
+    // Surface permission errors clearly so users know to fix their GitHub App config
+    if (err.status === 403 || message.includes('Resource not accessible')) {
+      emitter.emit('log', {
+        type: 'warning',
+        message: 'GitHub App lacks "Workflows: Read and write" permission — cannot auto-fix workflow file. ' +
+          'The deployment will proceed but may fail if the workflow is not configured correctly. ' +
+          'Ask a Portal Admin to update the GitHub App permissions.',
+      });
+    } else {
+      emitter.emit('log', { type: 'warning', message: `Workflow validation skipped: ${message}` });
+    }
   }
 }
 
@@ -572,8 +583,8 @@ async function findAndStoreRunId(
 ): Promise<void> {
   const octokit = await getAppOctokit();
 
-  // Try a few times to find the run
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // Try multiple times to find the run — GitHub can take up to 30s to register a dispatch
+  for (let attempt = 0; attempt < 10; attempt++) {
     const { data } = await octokit.actions.listWorkflowRuns({
       owner,
       repo,
@@ -598,8 +609,8 @@ async function findAndStoreRunId(
       return;
     }
 
-    // Wait 3 seconds before retrying
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Wait 5 seconds before retrying (increasing from 3s to give GitHub more time)
+    await new Promise((resolve) => setTimeout(resolve, 5000));
   }
 
   logger.warn(`Could not find GitHub run for deployment ${deploymentId} after retries`);

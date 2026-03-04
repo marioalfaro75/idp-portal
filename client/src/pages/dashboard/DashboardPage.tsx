@@ -49,7 +49,7 @@ const statusBarColors: Record<string, string> = {
 const providerColors: Record<string, string> = {
   aws: 'bg-amber-500',
   azure: 'bg-blue-500',
-  gcp: 'bg-red-500',
+  gcp: 'bg-gray-500',
 };
 
 export function DashboardPage() {

@@ -83,8 +83,14 @@ export function ServiceCatalogPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div>
         <h1 className="text-2xl font-bold">Services</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Scaffolded infrastructure projects — GitHub repos created from templates with Terraform config and CI/CD already set up. Unlike one-off deployments, services are long-lived and team-managed.{' '}
+          <Link to="/help" className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+            Learn more &rarr;
+          </Link>
+        </p>
       </div>
       <div className="max-w-xs">
         <Input
