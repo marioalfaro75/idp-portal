@@ -1,16 +1,24 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { githubApi } from '../../api/github';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Modal } from '../../components/ui/Modal';
 import { Select } from '../../components/ui/Select';
-import { GitBranch, ExternalLink, Info, Search, CheckCircle } from 'lucide-react';
+import { GitBranch, ExternalLink, Info, Search, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { timeAgo } from '../../utils/time';
 import { Link } from 'react-router-dom';
+import type { GitHubRepo } from '@idp/shared';
 
 export function GitHubPage() {
   const [repoSearch, setRepoSearch] = useState('');
   const [languageFilter, setLanguageFilter] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<GitHubRepo | null>(null);
+
+  const queryClient = useQueryClient();
 
   const { data: status, isLoading } = useQuery({
     queryKey: ['githubStatus'],
@@ -88,7 +96,13 @@ export function GitHubPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">GitHub Integration</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">GitHub Integration</h1>
+        <Button size="sm" onClick={() => setShowCreateModal(true)}>
+          <Plus className="w-4 h-4 mr-1.5" />
+          New Repository
+        </Button>
+      </div>
 
       {/* App Status Card */}
       <Card title="GitHub App">
@@ -148,6 +162,13 @@ export function GitHubPage() {
                       {repo.language && <Badge variant="info">{repo.language}</Badge>}
                     </div>
                     {repo.updatedAt && <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{timeAgo(repo.updatedAt)}</span>}
+                    <button
+                      onClick={() => setDeleteTarget(repo)}
+                      className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      title="Delete repository"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                   {repo.description && (
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 pl-0">{repo.description}</p>
@@ -162,6 +183,177 @@ export function GitHubPage() {
           </div>
         </div>
       </Card>
+
+      {/* Create Repo Modal */}
+      <CreateRepoModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={() => {
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: ['githubRepos'] });
+        }}
+      />
+
+      {/* Delete Repo Modal */}
+      <DeleteRepoModal
+        repo={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => {
+          setDeleteTarget(null);
+          queryClient.invalidateQueries({ queryKey: ['githubRepos'] });
+        }}
+      />
     </div>
+  );
+}
+
+function CreateRepoModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isPrivate, setIsPrivate] = useState(true);
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => githubApi.createRepo({ name, description: description || undefined, isPrivate }),
+    onSuccess: () => {
+      setName('');
+      setDescription('');
+      setIsPrivate(true);
+      setError('');
+      onCreated();
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error?.message || err.message || 'Failed to create repository');
+    },
+  });
+
+  const nameValid = /^[a-zA-Z0-9._-]+$/.test(name);
+
+  const handleClose = () => {
+    if (!mutation.isPending) {
+      setName('');
+      setDescription('');
+      setIsPrivate(true);
+      setError('');
+      onClose();
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={handleClose} title="New Repository">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name && nameValid) mutation.mutate();
+        }}
+        className="space-y-4"
+      >
+        <Input
+          label="Repository name"
+          value={name}
+          onChange={(e) => { setName(e.target.value); setError(''); }}
+          placeholder="my-new-repo"
+          error={name && !nameValid ? 'Only alphanumeric characters, hyphens, dots, and underscores allowed' : undefined}
+          autoFocus
+        />
+        <Input
+          label="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="A short description of the repository"
+        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Visibility</label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="visibility"
+                checked={isPrivate}
+                onChange={() => setIsPrivate(true)}
+                className="text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm">Private</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="visibility"
+                checked={!isPrivate}
+                onChange={() => setIsPrivate(false)}
+                className="text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm">Public</span>
+            </label>
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
+          <Button type="button" variant="secondary" onClick={handleClose} disabled={mutation.isPending}>Cancel</Button>
+          <Button type="submit" loading={mutation.isPending} disabled={!name || !nameValid}>Create Repository</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DeleteRepoModal({ repo, onClose, onDeleted }: { repo: GitHubRepo | null; onClose: () => void; onDeleted: () => void }) {
+  const [confirmName, setConfirmName] = useState('');
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const [owner, name] = repo!.fullName.split('/');
+      return githubApi.deleteRepo(owner, name);
+    },
+    onSuccess: () => {
+      setConfirmName('');
+      setError('');
+      onDeleted();
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error?.message || err.message || 'Failed to delete repository');
+    },
+  });
+
+  const handleClose = () => {
+    if (!mutation.isPending) {
+      setConfirmName('');
+      setError('');
+      onClose();
+    }
+  };
+
+  const repoName = repo?.fullName.split('/')[1] || '';
+  const confirmed = confirmName === repoName;
+
+  return (
+    <Modal open={!!repo} onClose={handleClose} title="Delete Repository">
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-gray-100">{repo?.fullName}</span>?
+          This action <span className="font-semibold text-red-600">cannot be undone</span>.
+        </p>
+        <Input
+          label={`Type "${repoName}" to confirm`}
+          value={confirmName}
+          onChange={(e) => { setConfirmName(e.target.value); setError(''); }}
+          placeholder={repoName}
+          autoFocus
+        />
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
+          <Button type="button" variant="secondary" onClick={handleClose} disabled={mutation.isPending}>Cancel</Button>
+          <Button
+            variant="danger"
+            onClick={() => mutation.mutate()}
+            loading={mutation.isPending}
+            disabled={!confirmed}
+          >
+            Delete Repository
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }

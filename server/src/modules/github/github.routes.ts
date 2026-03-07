@@ -3,7 +3,7 @@ import { asyncHandler } from '../../utils/async-handler';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
-import { PERMISSIONS, dispatchWorkflowSchema, saveGitHubAppConfigSchema } from '@idp/shared';
+import { PERMISSIONS, dispatchWorkflowSchema, saveGitHubAppConfigSchema, createRepoSchema } from '@idp/shared';
 import * as service from './github.service';
 import { testPrivateKey } from './github-app';
 import * as auditService from '../audit/audit.service';
@@ -53,6 +53,20 @@ router.post('/app/test-key', authorize(PERMISSIONS.PORTAL_ADMIN), asyncHandler(a
 router.get('/repos', authorize(PERMISSIONS.GITHUB_MANAGE), asyncHandler(async (_req, res) => {
   const repos = await service.listRepos();
   res.json(repos);
+}));
+
+router.post('/repos', authorize(PERMISSIONS.GITHUB_MANAGE), validate(createRepoSchema), asyncHandler(async (req, res) => {
+  const { name, description, isPrivate } = req.body;
+  const result = await service.createRepo(name, description || '', isPrivate);
+  await auditService.log({ action: 'create', resource: 'github_repo', userId: req.user!.sub, ipAddress: req.ip, details: { repo: result.fullName } });
+  res.status(201).json(result);
+}));
+
+router.delete('/repos/:owner/:repo', authorize(PERMISSIONS.GITHUB_MANAGE), asyncHandler(async (req, res) => {
+  const { owner, repo } = req.params;
+  await service.deleteRepo(owner, repo);
+  await auditService.log({ action: 'delete', resource: 'github_repo', userId: req.user!.sub, ipAddress: req.ip, details: { repo: `${owner}/${repo}` } });
+  res.status(204).end();
 }));
 
 router.get('/repos/:owner/:repo/workflows', authorize(PERMISSIONS.GITHUB_MANAGE), asyncHandler(async (req, res) => {

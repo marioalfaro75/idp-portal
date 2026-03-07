@@ -44,3 +44,9 @@ export interface DispatchWorkflowRequest {
   ref: string;
   inputs?: Record<string, string>;
 }
+
+export interface CreateRepoRequest {
+  name: string;
+  description?: string;
+  isPrivate: boolean;
+}

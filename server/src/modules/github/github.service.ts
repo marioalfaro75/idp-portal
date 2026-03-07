@@ -151,6 +151,11 @@ export async function createRepo(
   };
 }
 
+export async function deleteRepo(owner: string, repo: string): Promise<void> {
+  const octokit = await getAppOctokit();
+  await octokit.repos.delete({ owner, repo });
+}
+
 export async function pushScaffoldFiles(
   owner: string,
   repo: string,

@@ -1,5 +1,5 @@
 import api from './client';
-import type { GitHubAppStatus, GitHubAppTestResult, SaveGitHubAppConfigRequest, GitHubRepo, GitHubWorkflow, DispatchWorkflowRequest } from '@idp/shared';
+import type { GitHubAppStatus, GitHubAppTestResult, SaveGitHubAppConfigRequest, GitHubRepo, GitHubWorkflow, DispatchWorkflowRequest, CreateRepoRequest } from '@idp/shared';
 
 export const githubApi = {
   getStatus: () => api.get<GitHubAppStatus>('/github/status').then((r) => r.data),
@@ -10,4 +10,6 @@ export const githubApi = {
   listWorkflows: (owner: string, repo: string) =>
     api.get<GitHubWorkflow[]>(`/github/repos/${owner}/${repo}/workflows`).then((r) => r.data),
   dispatchWorkflow: (data: DispatchWorkflowRequest) => api.post('/github/dispatch', data).then((r) => r.data),
+  createRepo: (data: CreateRepoRequest) => api.post('/github/repos', data).then((r) => r.data),
+  deleteRepo: (owner: string, repo: string) => api.delete(`/github/repos/${owner}/${repo}`).then((r) => r.data),
 };
