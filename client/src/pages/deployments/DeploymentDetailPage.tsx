@@ -247,14 +247,39 @@ export function DeploymentDetailPage() {
 
       {Object.keys(deployment.variables).length > 0 && (
         <Card title="Variables">
-          <dl className="space-y-2">
-            {Object.entries(deployment.variables).map(([key, value]) => (
-              <div key={key} className="flex gap-4">
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 w-48">{key}</dt>
-                <dd className="text-sm">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="overflow-x-auto -mx-4 sm:-mx-6">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-2 px-4 sm:px-6 font-medium text-gray-500 dark:text-gray-400 w-1/3">Variable</th>
+                  <th className="text-left py-2 px-4 sm:px-6 font-medium text-gray-500 dark:text-gray-400">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(deployment.variables).map(([key, value], i) => (
+                  <tr key={key} className={i % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800/50' : ''}>
+                    <td className="py-2 px-4 sm:px-6 font-medium text-gray-700 dark:text-gray-300 font-mono">{key}</td>
+                    <td className="py-2 px-4 sm:px-6 font-mono text-gray-900 dark:text-gray-100 break-all">
+                      {(() => {
+                        const str = String(value);
+                        try {
+                          const parsed = JSON.parse(str);
+                          if (typeof parsed === 'object' && parsed !== null) {
+                            return (
+                              <pre className="bg-gray-100 dark:bg-gray-700/50 rounded px-2 py-1 text-xs whitespace-pre overflow-x-auto">
+                                {JSON.stringify(parsed, null, 2)}
+                              </pre>
+                            );
+                          }
+                        } catch { /* not JSON */ }
+                        return str;
+                      })()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </div>
